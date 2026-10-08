@@ -94,7 +94,7 @@ echo "=== extension errors ==="
 # process appears in the shell log and nowhere else. Scan both, or a thrown
 # exception reads as a clean run.
 ERRORS="$(cat "${TMPDIR:-/tmp}/codexbar-ui-errors.txt" "${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>/dev/null \
-  | grep -E "JS ERROR|Extension ($UUID|$DUMPER_UUID):" \
+  | grep -E "JS ERROR|Extension ($UUID|$DUMPER_UUID):|\\[CodexBar\\]" \
   | grep -viE "libmutter|meta_monitor|meta_workspace" | head -20)"
 if [ -z "$ERRORS" ] && grep -qF '(@as [],)' "${TMPDIR:-/tmp}/codexbar-ui-errors.txt"; then
   echo "clean"

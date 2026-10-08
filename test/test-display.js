@@ -27,9 +27,9 @@ const gettext = (s) => {
 const helperSrc = src.slice(src.indexOf("function formatResetsIn"), src.indexOf("export default class"));
 const helpers = new Function(
   "_",
-  `${helperSrc}; return { formatResetsIn, formatUpdated, isExceedingPace, formatPace, barColor, fillWidth };`,
+  `${helperSrc}; return { formatResetsIn, formatUpdated, isExceedingPace, formatPace, barColor, fillWidth, activeProviderIndex };`,
 )(gettext);
-const { formatResetsIn, formatUpdated, isExceedingPace, formatPace, barColor, fillWidth } = helpers;
+const { formatResetsIn, formatUpdated, isExceedingPace, formatPace, barColor, fillWidth, activeProviderIndex } = helpers;
 
 let failed = 0;
 let passed = 0;
@@ -155,6 +155,16 @@ check("panel half", fillWidth(22, 50, 2), 10);
 check("panel full", fillWidth(22, 100, 2), 20);
 check("panel clamps over 100", fillWidth(22, 140, 2), 20);
 check("panel clamps below zero", fillWidth(22, -20, 2), 1);
+
+console.log("provider errors do not hide healthy providers");
+const providers = [
+  { id: "codex", kind: "error" },
+  { id: "opencodego", kind: "windows" },
+  { id: "deepseek", kind: "balance" },
+];
+check("skip first errored provider on initial selection", activeProviderIndex(providers, 0), 1);
+check("keep selected healthy provider", activeProviderIndex(providers, 2), 2);
+check("all errors stay visible", activeProviderIndex([{ kind: "error" }], 0), 0);
 
 console.log("");
 console.log(`${passed} passed, ${failed} failed`);

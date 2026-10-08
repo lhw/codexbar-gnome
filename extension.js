@@ -204,6 +204,16 @@ function fillWidth(trackWidth, percent, inset = 0) {
   return Math.max(1, Math.round((inner * clamped) / 100));
 }
 
+function activeProviderIndex(providers, currentIndex) {
+  if (providers[currentIndex] && providers[currentIndex].kind !== "error") {
+    return currentIndex;
+  }
+  const available = providers.findIndex((provider) => provider.kind !== "error");
+  return available < 0
+    ? Math.max(0, Math.min(currentIndex, providers.length - 1))
+    : available;
+}
+
 export default class CodexBarExtension extends Extension {
   enable() {
     this._settings = this.getSettings();
@@ -345,6 +355,7 @@ export default class CodexBarExtension extends Extension {
 
       if (this._cancellable?.is_cancelled() || !this._indicator) return;
 
+      this._activeIndex = activeProviderIndex(providers, this._activeIndex);
       this._providers = providers;
       this._cost = cost;
       this._error = null;
@@ -407,7 +418,7 @@ export default class CodexBarExtension extends Extension {
    * @returns {number} 0 to 100.
    */
   _worstPercent(provider) {
-    const meters = provider.windows.filter((w) => w.meter);
+    const meters = provider.windows?.filter((w) => w.meter) || [];
     if (meters.length === 0) return 0;
     return Math.max(...meters.map((w) => w.usedPercent));
   }
@@ -674,19 +685,23 @@ export default class CodexBarExtension extends Extension {
       // you can see which provider needs attention without switching to it.
       // Balance providers have no usage meter, so they get a dim full-width
       // track rather than a misleading near-empty fill.
+      // Error providers have no usage windows; leave their track empty.
+      const isError = provider.kind === "error";
       const isBalance = provider.kind === "balance";
-      const percent = isBalance ? 0 : this._worstPercent(provider);
+      const percent = isBalance || isError ? 0 : this._worstPercent(provider);
       const fillPercent = isBalance ? 100 : percent;
 
       const track = new St.BoxLayout({ style_class: "codexbar-tab-track" });
-      track.add_child(
-        new St.Widget({
-          style_class: isBalance
-            ? "codexbar-tab-fill codexbar-tab-fill-balance"
-            : "codexbar-tab-fill",
-          style: `width: ${fillWidth(TAB_TRACK_WIDTH, fillPercent)}px; background-color: ${isBalance ? "#77767b" : barColor(percent)};`,
-        }),
-      );
+      if (!isError) {
+        track.add_child(
+          new St.Widget({
+            style_class: isBalance
+              ? "codexbar-tab-fill codexbar-tab-fill-balance"
+              : "codexbar-tab-fill",
+            style: `width: ${fillWidth(TAB_TRACK_WIDTH, fillPercent)}px; background-color: ${isBalance ? "#77767b" : barColor(percent)};`,
+          }),
+        );
+      }
       column.add_child(track);
       button.set_child(column);
 

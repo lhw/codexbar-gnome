@@ -96,6 +96,27 @@ export default class CodexBarDumper extends Extension {
     }
 
     button.menu.open();
+    const target = Extension.lookupByUUID(uuid);
+    if (target._providers.some((provider) => provider.kind !== "error")) {
+      const tabs = [];
+      const collectTabs = (actor) => {
+        if (actor instanceof St.Button && String(actor.style_class).includes("codexbar-tab")) {
+          tabs.push(actor);
+        }
+        actor.get_children().forEach(collectTabs);
+      };
+      collectTabs(button.menu.actor);
+      if (tabs.length !== target._providers.length) {
+        throw new Error(`expected ${target._providers.length} provider tabs, got ${tabs.length}`);
+      }
+      if (target._providers[target._activeIndex]?.kind === "error") {
+        throw new Error("active provider is errored despite healthy providers being available");
+      }
+      if (target._contentBox.get_children().length === 0) {
+        throw new Error("healthy provider content did not render");
+      }
+      print("CODEXBAR-DUMP PROVIDER-ERROR-CHECKS-PASSED");
+    }
     const lines = [];
     this._walk(button.menu.actor, 0, lines);
     lines.forEach((l) => print(`CODEXBAR-DUMP ${l}`));
@@ -161,7 +182,6 @@ export default class CodexBarDumper extends Extension {
     // cannot be constructed. Call the handler directly instead, which is the
     // same reach this harness already has into the widget tree.
     try {
-      const target = Extension.lookupByUUID(uuid);
       button.menu.close();
       target._showAbout();
       const dialog = target._aboutDialog;
