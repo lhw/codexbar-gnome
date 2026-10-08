@@ -42,9 +42,7 @@ cd codexbar-gnome
 
 Or download `codexbar-gnome@lhw.shell-extension.zip` from the
 [releases page](https://github.com/lhw/codexbar-gnome/releases) and install it
-with `gnome-extensions install --force <zip>`. Every CI run also attaches the
-zip to its
-[workflow summary](https://github.com/lhw/codexbar-gnome/actions/workflows/ci.yml).
+with `gnome-extensions install --force <zip>`.
 
 You need the `codexbar` CLI on `PATH` (`brew install steipete/tap/codexbar`, or
 a Linux build). On Wayland, log out and back in after installing so the shell

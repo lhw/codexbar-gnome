@@ -41,6 +41,15 @@ that way. `extension.js` cannot be imported outside a shell, so
 ./install.sh    # build, then install into the user extension dir
 ```
 
+There is no test CI. It was tried and removed: `gnome-extensions pack` needs the
+`gnome-shell` package, which takes several minutes to install on a runner, and
+that cost outweighed the benefit for six suites that run in under a second
+locally. Run them before pushing.
+
+Release-please still maintains the version and cuts releases, and `.github/workflows/release.yml`
+builds the zip and attaches it to the published release, so that path still
+installs `gnome-shell`.
+
 `build.sh` runs `test-parse`, `test-cost`, `test-display`, `test-links`,
 `test-prefs` and `test-cli` against fixtures in `fixtures/`. `test-cli.js` shells
 out to the real binary; the rest are pure.
