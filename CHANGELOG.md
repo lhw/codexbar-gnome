@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.1.0](https://github.com/lhw/codexbar-gnome/compare/v1.0.0...v1.1.0) (2026-10-08)
+
+
+### Features
+
+* show About CodexBar as a shell dialog ([476ae36](https://github.com/lhw/codexbar-gnome/commit/476ae36c74e8d7c71f5c7a432c830627f89fffec))
+
+
+### Bug Fixes
+
+* trigger the release build on workflow_run, not release: published ([b12b470](https://github.com/lhw/codexbar-gnome/commit/b12b47025c5769b381cda010c1a8cc21ccce54d4))
+
 ## [1.0.0](https://github.com/lhw/codexbar-gnome/compare/v0.0.0...v1.0.0) (2026-10-08)
 
 
