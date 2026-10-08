@@ -32,15 +32,15 @@ export default class CodexBarDumper extends Extension {
   _describe(actor) {
     const cls = String(actor.style_class || "");
     const isIcon = actor instanceof St.Icon;
-    const isBar = /codexbar-(bar|tab|panel)-(track|fill|marker|marker-tick)/.test(cls);
+    const isBar = /codexbar-(bar|tab|panel)-(track|fill|marker)/.test(cls);
     if (actor instanceof St.Label) return `label ${JSON.stringify(actor.text)}`;
     if (isIcon) return `icon size=${actor.icon_size}`;
-    // Bars report geometry and a11y together. Height matters as much as width:
-    // a panel indicator taller than its neighbours is the obvious defect, and
-    // only the real allocation shows it.
+    // Bars report geometry, x offset, and a11y together. The x offset matters:
+    // the pace tick overlaps the fill inside one track, so a tick positioned
+    // past the track width is a defect that width alone would not reveal.
     if (isBar) {
       const acc = actor.accessible_name ? ` a11y:${actor.accessible_name}` : "";
-      return `${cls} ${this._sizeOf(actor)}${acc}`;
+      return `${cls} ${this._sizeOf(actor)} x=${this._xOf(actor)}${acc}`;
     }
     if (actor.accessible_name) return `a11y:${actor.accessible_name}`;
     return null;
@@ -54,6 +54,14 @@ export default class CodexBarDumper extends Extension {
   _heightOf(actor) {
     try {
       return Math.round(actor.get_height());
+    } catch (e) {
+      return -1;
+    }
+  }
+
+  _xOf(actor) {
+    try {
+      return Math.round(actor.get_x());
     } catch (e) {
       return -1;
     }

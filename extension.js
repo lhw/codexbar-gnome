@@ -97,6 +97,30 @@ function formatUpdated(iso, now = new Date()) {
 }
 
 /**
+ * True when a window is being consumed faster than its elapsed time allows.
+ *
+ * @param {object} window Normalized window from parse.js.
+ * @returns {boolean}
+ */
+function isExceedingPace(window) {
+  const pace = window?.pace;
+  if (!pace) return false;
+
+  // willLastToReset is the CLI's own verdict, but only the eta form carries it.
+  // Fall back to comparing against the expected percentage, which is always
+  // present, and treat an unknown stage as "no opinion" rather than a warning.
+  if (pace.willLastToReset === true) return false;
+
+  const expected = Number(pace.expectedUsedPercent);
+  if (Number.isFinite(expected)) {
+    return Number(window.usedPercent) > expected;
+  }
+
+  // No expected percentage: fall back to the stage names the CLI uses.
+  return ["farAhead", "slightlyAhead", "ahead"].includes(pace.stage);
+}
+
+/**
  * Pace line, in the macOS wording. The CLI sends a ready-made summary, but it
  * is phrased for a terminal, so the stage and last-to-reset flags drive the
  * short popup line instead.
@@ -611,10 +635,14 @@ export default class CodexBarExtension extends Extension {
     const box = new St.BoxLayout({ vertical: true, x_expand: true });
     box.add_child(new St.Label({ text: window.label, style_class: "codexbar-section" }));
 
-    const track = new St.BoxLayout({ style_class: "codexbar-bar-track" });
+    // A plain St.Widget, not a BoxLayout: the fill and the tick have to overlap
+    // inside one track, and a BoxLayout would place them side by side, pushing
+    // the tick past the end of the bar.
+    const track = new St.Widget({ style_class: "codexbar-bar-track" });
     track.add_child(
       new St.Widget({
         style_class: "codexbar-bar-fill",
+        x: 0,
         style: `width: ${fillWidth(BAR_WIDTH_PX, window.usedPercent)}px; background-color: ${barColor(window.usedPercent)};`,
       }),
     );
@@ -624,16 +652,12 @@ export default class CodexBarExtension extends Extension {
     if (this._settings.get_boolean("show-pace")) {
       const expected = Number(window.pace?.expectedUsedPercent);
       if (Number.isFinite(expected) && expected > 0) {
-        // A spacer sized to the expected position, with the tick right-aligned
-        // inside it so the tick itself lands on the mark rather than before it.
-        const marker = new St.BoxLayout({
-          style_class: "codexbar-bar-marker",
-          vertical: false,
-          style: `width: ${fillWidth(BAR_WIDTH_PX, expected)}px;`,
-        });
-        marker.add_child(new St.Widget({ x_expand: true }));
-        marker.add_child(new St.Widget({ style_class: "codexbar-bar-marker-tick" }));
-        track.add_child(marker);
+        track.add_child(
+          new St.Widget({
+            style_class: "codexbar-bar-marker",
+            x: fillWidth(BAR_WIDTH_PX, expected) - 1,
+          }),
+        );
       }
     }
     box.add_child(track);
@@ -650,7 +674,10 @@ export default class CodexBarExtension extends Extension {
     }
     box.add_child(row);
 
-    if (this._settings.get_boolean("show-pace")) {
+    // Only warn when the window is actually being over-consumed. The macOS app
+    // does the same: a healthy window says nothing, and the tick in the bar
+    // already carries the "you are fine" signal.
+    if (this._settings.get_boolean("show-pace") && isExceedingPace(window)) {
       const pace = formatPace(window.pace, window.usedPercent);
       if (pace) {
         const paceLabel = dimLabel({ text: pace });

@@ -25,8 +25,11 @@ const gettext = (s) => {
 };
 
 const helperSrc = src.slice(src.indexOf("function formatResetsIn"), src.indexOf("export default class"));
-const helpers = new Function("_", `${helperSrc}; return { formatResetsIn, formatUpdated, formatPace, barColor, fillWidth };`)(gettext);
-const { formatResetsIn, formatUpdated, formatPace, barColor, fillWidth } = helpers;
+const helpers = new Function(
+  "_",
+  `${helperSrc}; return { formatResetsIn, formatUpdated, isExceedingPace, formatPace, barColor, fillWidth };`,
+)(gettext);
+const { formatResetsIn, formatUpdated, isExceedingPace, formatPace, barColor, fillWidth } = helpers;
 
 let failed = 0;
 let passed = 0;
@@ -58,6 +61,49 @@ check("minutes", formatUpdated("2026-10-08T11:55:00Z", NOW), "Updated 5m ago");
 check("hours", formatUpdated("2026-10-08T10:00:00Z", NOW), "Updated 2h ago");
 check("days", formatUpdated("2026-10-06T12:00:00Z", NOW), "Updated 2d ago");
 check("missing", formatUpdated(null, NOW), "");
+
+console.log("pace warnings only appear when a window is over-consumed");
+const win = (used, pace) => ({ usedPercent: used, pace });
+check(
+  "well over pace warns",
+  isExceedingPace(win(97, { expectedUsedPercent: 65, stage: "farAhead", willLastToReset: false })),
+  true,
+);
+check(
+  "just over pace warns",
+  isExceedingPace(win(51, { expectedUsedPercent: 50, stage: "slightlyAhead", willLastToReset: false })),
+  true,
+);
+check(
+  "exactly on pace is quiet",
+  isExceedingPace(win(50, { expectedUsedPercent: 50, stage: "ahead", willLastToReset: true })),
+  false,
+);
+check(
+  "under pace is quiet",
+  isExceedingPace(win(10, { expectedUsedPercent: 65, stage: "behind", willLastToReset: true })),
+  false,
+);
+check(
+  "no pace data is quiet",
+  isExceedingPace(win(90, null)),
+  false,
+);
+check(
+  "willLastToReset true silences an ahead stage",
+  isExceedingPace(win(90, { expectedUsedPercent: 10, stage: "ahead", willLastToReset: true })),
+  false,
+);
+check(
+  "falls back to stage without an expected percentage",
+  isExceedingPace(win(90, { stage: "farAhead" })),
+  true,
+);
+check(
+  "unknown stage without expected is quiet",
+  isExceedingPace(win(90, { stage: "somethingNew" })),
+  false,
+);
 
 console.log("pace lines read like the macOS app");
 check(
