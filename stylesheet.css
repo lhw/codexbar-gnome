@@ -108,6 +108,19 @@
     border-radius: 3px;
 }
 
+/* Pace tick: marks where usage should be by now. Sits on top of the fill, so it
+   stays visible whether you are ahead of or behind it. */
+.codexbar-bar-marker {
+    height: 6px;
+}
+
+.codexbar-bar-marker-tick {
+    width: 2px;
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+}
+
 .codexbar-separator {
     height: 1px;
     background-color: rgba(127, 127, 127, 0.22);

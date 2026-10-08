@@ -32,7 +32,7 @@ export default class CodexBarDumper extends Extension {
   _describe(actor) {
     const cls = String(actor.style_class || "");
     const isIcon = actor instanceof St.Icon;
-    const isBar = /codexbar-(bar|tab|panel)-(track|fill)/.test(cls);
+    const isBar = /codexbar-(bar|tab|panel)-(track|fill|marker|marker-tick)/.test(cls);
     if (actor instanceof St.Label) return `label ${JSON.stringify(actor.text)}`;
     if (isIcon) return `icon size=${actor.icon_size}`;
     // Bars report geometry and a11y together. Height matters as much as width:

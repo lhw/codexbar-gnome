@@ -618,6 +618,24 @@ export default class CodexBarExtension extends Extension {
         style: `width: ${fillWidth(BAR_WIDTH_PX, window.usedPercent)}px; background-color: ${barColor(window.usedPercent)};`,
       }),
     );
+
+    // A tick at the point where usage "should" be by now, so ahead and behind
+    // read at a glance instead of having to compare two numbers.
+    if (this._settings.get_boolean("show-pace")) {
+      const expected = Number(window.pace?.expectedUsedPercent);
+      if (Number.isFinite(expected) && expected > 0) {
+        // A spacer sized to the expected position, with the tick right-aligned
+        // inside it so the tick itself lands on the mark rather than before it.
+        const marker = new St.BoxLayout({
+          style_class: "codexbar-bar-marker",
+          vertical: false,
+          style: `width: ${fillWidth(BAR_WIDTH_PX, expected)}px;`,
+        });
+        marker.add_child(new St.Widget({ x_expand: true }));
+        marker.add_child(new St.Widget({ style_class: "codexbar-bar-marker-tick" }));
+        track.add_child(marker);
+      }
+    }
     box.add_child(track);
 
     const row = new St.BoxLayout({ x_expand: true });

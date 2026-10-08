@@ -77,14 +77,23 @@ check(
 );
 check("no pace data", formatPace(null, 56), "");
 
+// A 296px track is the popup content width minus padding.
+const TRACK = 296;
+
+// The pace tick sits at the expected percentage, so its x offset must land
+// inside the track for any realistic value.
+console.log("pace tick position stays within the track");
+check("0% expected clamps to the start", fillWidth(TRACK, 0), 1);
+check("50% expected is the midpoint", fillWidth(TRACK, 50), 148);
+check("100% expected is the end", fillWidth(TRACK, 100), TRACK);
+check("over 100 clamps", fillWidth(TRACK, 130), TRACK);
+check("negative clamps", fillWidth(TRACK, -5), 1);
+
 console.log("bar colours follow the macOS thresholds");
 check("low", barColor(10), "#3584e4");
 check("half", barColor(55), "#f6d32d");
 check("high", barColor(80), "#ff7800");
 check("critical", barColor(95), "#e01b24");
-
-// A 296px track is the popup content width minus padding.
-const TRACK = 296;
 
 console.log("fills size from the measured track, never as a percentage");
 check("empty", fillWidth(TRACK, 0), 1);
@@ -95,11 +104,11 @@ check("never zero", fillWidth(TRACK, 0.1), 1);
 check("zero-width track still shows something", fillWidth(0, 50), 1);
 
 console.log("the panel bar inset accounts for its border and padding");
-check("panel empty", fillWidth(18, 0, 4), 1);
-check("panel half", fillWidth(18, 50, 4), 7);
-check("panel full", fillWidth(18, 100, 4), 14);
-check("panel clamps over 100", fillWidth(18, 140, 4), 14);
-check("panel clamps below zero", fillWidth(18, -20, 4), 1);
+check("panel empty", fillWidth(22, 0, 2), 1);
+check("panel half", fillWidth(22, 50, 2), 10);
+check("panel full", fillWidth(22, 100, 2), 20);
+check("panel clamps over 100", fillWidth(22, 140, 2), 20);
+check("panel clamps below zero", fillWidth(22, -20, 2), 1);
 
 console.log("");
 console.log(`${passed} passed, ${failed} failed`);
