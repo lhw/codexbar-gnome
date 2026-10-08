@@ -90,8 +90,8 @@ usage data.
 - No Sonnet or Extra usage rows. Those come from Claude-specific fields that the
   current CLI does not expose; they will appear if a provider reports them.
 
-About CodexBar opens a dialog in the shell with the version, links to every
-project, and the credits below.
+About CodexBar opens a plain dialog with the version, credits and project links,
+without dimming the desktop.
 
 ## Credits
 

@@ -109,3 +109,8 @@ grep -iE "$UUID" "${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>/dev/null \
   | grep -viE "libmutter|meta_monitor|meta_workspace" | head -20
 
 rm -rf "$EXT_ROOT/$DUMPER_UUID"
+
+if [ -n "$ERRORS" ] || ! grep -q "ABOUT-CHECKS-PASSED" "${TMPDIR:-/tmp}/codexbar-ui-shell.log"; then
+  echo "UI checks failed" >&2
+  exit 1
+fi

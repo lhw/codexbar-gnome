@@ -274,6 +274,7 @@ export default class CodexBarExtension extends Extension {
 
   disable() {
     this._clearTimer();
+    this._closeAbout();
     if (this._cancellable) {
       this._cancellable.cancel();
       this._cancellable = null;
@@ -510,15 +511,11 @@ export default class CodexBarExtension extends Extension {
     });
   }
 
-  /**
-   * Show the credits and project links as a shell modal dialog.
-   *
-   * A GTK window cannot be opened from here. The shell never runs a GTK main
-   * loop, and calling Gtk.init() from an extension takes the compositor down
-   * with it. A modal dialog is the shell's own dialog and comes themed, so
-   * nothing about its appearance is styled here.
-   */
   _showAbout() {
+    if (this._aboutDialog) {
+      return;
+    }
+
     let meta;
     try {
       meta = JSON.parse(
@@ -533,74 +530,53 @@ export default class CodexBarExtension extends Extension {
       return;
     }
 
-    const heading = (text) =>
-      new St.Label({ text, style_class: "codexbar-about-heading" });
-
-    // line_wrap so a long URL wraps instead of running past the dialog, which
-    // the shell's own 28em content limit is narrower than some of them. It lives
-    // on the Clutter.Text, not on StLabel.
-    const body = (text) => {
-      const label = new St.Label({ text, style_class: "codexbar-about-body" });
-      label.clutter_text.line_wrap = true;
-      return label;
-    };
-
-    // The clickable part is the human label, not the URL. A button's label is
-    // single-line, and the longest URL is wider than the dialog, whereas the
-    // body text wraps. Attribution lives in the credits below rather than on
-    // each row, which keeps every button short.
-    const linkRow = (label, url) => {
-      const row = new St.BoxLayout({
-        vertical: true,
-        style_class: "codexbar-about-row",
-      });
-
-      // shell-link is the shell theme's own link style, so the link matches the
-      // desktop without this extension picking a colour.
-      const link = new St.Button({
-        label,
-        style_class: "shell-link codexbar-about-link",
-      });
-      link.connect("clicked", () => Gio.AppInfo.launch_default_for_uri(url, null));
-      row.add_child(link);
-      row.add_child(body(url));
-      return row;
-    };
-
-    const box = new St.BoxLayout({
-      vertical: true,
-      style_class: "codexbar-about-box",
+    const dialog = new ModalDialog({
+      // shellReactive omits the shell's dimming lightbox.
+      shellReactive: true,
+      shouldFadeIn: false,
+      shouldFadeOut: false,
     });
+    const text = new St.Label({
+      text: `${meta.name} — ${_("Version")} ${meta.version}\n\n` + _(
+        "Fork of the extension by @inled.es (extension 9841).\n" +
+        "Provider logos from CodexBar. MIT licence.",
+      ),
+    });
+    text.clutter_text.line_wrap = true;
+    dialog.contentLayout.add_child(text);
 
-    box.add_child(heading(meta.name));
-    box.add_child(body(`${_("Version")} ${meta.version}  ·  ${meta.uuid}`));
-    box.add_child(body(meta.description));
-
-    box.add_child(heading(_("Links")));
-    box.add_child(linkRow(_("This extension"), EXTENSION_REPO_URL));
-    box.add_child(linkRow(_("codexbar CLI"), CLI_REPO_URL));
-    box.add_child(linkRow(_("Upstream extension"), FORK_ORIGIN_URL));
-    box.add_child(linkRow(_("Upstream on extensions.gnome.org"), FORK_ORIGIN_EXTENSION_URL));
-    box.add_child(linkRow(_("License"), LICENSE_URL));
-
-    box.add_child(heading(_("Credits")));
-    box.add_child(body(_(
-      "A fork of the extension by @inled.es, published as extension 9841 and " +
-      "linked from the codexbar README. This fork was rewritten around a single " +
-      "CLI call, so much of the original implementation no longer applies; the " +
-      "commit history has the detail. Provider logos come from the codexbar logo " +
-      "set, converted to GNOME symbolic icons so they follow the active theme. " +
-      "MIT licence, inherited from upstream.",
-    )));
-
-    const dialog = new ModalDialog({ styleClass: "codexbar-about-dialog" });
-    dialog.contentLayout.add_child(box);
+    for (const [label, url] of [
+      [_("This extension"), EXTENSION_REPO_URL],
+      [_("codexbar CLI"), CLI_REPO_URL],
+      [_("Upstream extension"), FORK_ORIGIN_URL],
+      [_("Upstream on extensions.gnome.org"), FORK_ORIGIN_EXTENSION_URL],
+      [_("License"), LICENSE_URL],
+    ]) {
+      const link = new St.Button({ label, style_class: "shell-link" });
+      link.connect("clicked", () => {
+        try {
+          Gio.AppInfo.launch_default_for_uri(url, null);
+          dialog.close();
+        } catch (e) {
+          console.error(`[CodexBar] could not open ${url}: ${e}`);
+        }
+      });
+      dialog.contentLayout.add_child(link);
+    }
     dialog.setButtons([{
       label: _("Close"),
       action: () => dialog.close(),
       key: Clutter.KEY_Escape,
     }]);
-    dialog.open();
+    this._aboutDialog = dialog;
+    dialog.connect("destroy", () => { this._aboutDialog = null; });
+    if (!dialog.open()) this._closeAbout();
+  }
+
+  _closeAbout() {
+    this._aboutDialog?.close();
+    this._aboutDialog?.destroy();
+    this._aboutDialog = null;
   }
 
   _updateUI() {

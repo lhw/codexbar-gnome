@@ -63,11 +63,10 @@ caught.
 
 These cost real debugging time. All of them bit during development.
 
-- **`Gtk.init()` from an extension kills the compositor.** The shell runs a
-  `GLib.MainLoop`, never a GTK one. So there is no GTK or Adw dialog to be had
-  from the shell process, and the About dialog is a `ModalDialog` instead, which
-  is the shell's own dialog and comes themed. Assert this before repeating it:
-  probe from a companion extension, not by reasoning about it.
+- **Do not initialise GTK in the shell process.** A local `Gtk.init()` probe
+  terminated the headless shell. Use the shell's own themed `ModalDialog`.
+  Its `shellReactive: true` option omits the dimming lightbox; disable fades
+  for the plain About dialog. This is in GNOME 50's `ui/modalDialog.js`.
 - **`Dialog.MessageDialogContent.description` takes a string, not an actor** in
   GNOME 50, and its buttons live on `ModalDialog`, not on the content. For
   anything richer than a title and a paragraph, add your own actor to

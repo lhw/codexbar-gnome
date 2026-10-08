@@ -162,14 +162,30 @@ export default class CodexBarDumper extends Extension {
     // same reach this harness already has into the widget tree.
     try {
       const target = Extension.lookupByUUID(uuid);
+      button.menu.close();
       target._showAbout();
+      const dialog = target._aboutDialog;
+      if (!dialog?.visible) throw new Error("About dialog did not open");
+      if (dialog._lightbox) throw new Error("About dialog has a dimming lightbox");
+      const links = dialog.contentLayout.get_children()
+        .filter(actor => actor instanceof St.Button);
+      if (links.length !== 5) throw new Error("Expected five project links");
+      if (dialog.contentLayout.get_children().some(actor =>
+        actor instanceof St.Label && actor.text.includes("https://"))) {
+        throw new Error("About dialog repeats URLs as text");
+      }
       const dialogLines = [];
-      Main.layoutManager.modalDialogGroup.get_children().forEach((dlg) => {
-        this._walk(dlg, 0, dialogLines);
-        dialogLines.push(`  width=${Math.round(dlg.get_width())}`);
-      });
+      this._walk(dialog, 0, dialogLines);
       print("CODEXBAR-DUMP --- about dialog ---");
       dialogLines.forEach((l) => print(`CODEXBAR-DUMP ${l}`));
+      target._showAbout();
+      if (target._aboutDialog !== dialog) throw new Error("Duplicate About dialog");
+      dialog.close();
+      if (target._aboutDialog) throw new Error("About dialog survived closing");
+      target._showAbout();
+      target._closeAbout();
+      if (target._aboutDialog) throw new Error("About dialog survived cleanup");
+      print("CODEXBAR-DUMP ABOUT-CHECKS-PASSED");
     } catch (e) {
       print(`CODEXBAR-DUMP --- about dialog --- THREW ${e.message}`);
       print(`CODEXBAR-DUMP --- about stack --- ${e.stack}`);
