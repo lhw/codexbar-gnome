@@ -1,9 +1,11 @@
 {
   "uuid": "codexbar-gnome@lhw",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "name": "CodexBar",
   "description": "AI provider usage limits in the GNOME panel, from the codexbar CLI. Fork of InledGroup/codexbar-gnome.",
-  "shell-version": ["50"],
+  "shell-version": [
+    "50"
+  ],
   "url": "https://github.com/lhw/codexbar-gnome",
   "settings-schema": "org.gnome.shell.extensions.codexbar"
 }
