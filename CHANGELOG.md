@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1](https://github.com/lhw/codexbar-gnome/compare/v1.1.0...v1.1.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* simplify About dialog without dimming the desktop ([0af885b](https://github.com/lhw/codexbar-gnome/commit/0af885bb4473a8ac26799f16c6e93e58e37d5514))
+
 ## [1.1.0](https://github.com/lhw/codexbar-gnome/compare/v1.0.0...v1.1.0) (2026-10-08)
 
 
