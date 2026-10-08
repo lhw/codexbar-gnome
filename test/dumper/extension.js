@@ -2,11 +2,22 @@
 // shell log so ui-test.sh can assert on it, including after switching tabs.
 // Never shipped.
 import GLib from "gi://GLib";
+import Gio from "gi://Gio";
 import St from "gi://St";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 
 export default class CodexBarDumper extends Extension {
+  // Style-resolved width, which is what a fill is computed against. Reading the
+  // real value is the only way to catch an invisible bar.
+  _widthOf(actor) {
+    try {
+      return Math.round(actor.get_width());
+    } catch (e) {
+      return -1;
+    }
+  }
+
   enable() {
     const target = GLib.getenv("CODEXBAR_DUMP_TARGET");
     this._timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 12, () => {
@@ -15,13 +26,31 @@ export default class CodexBarDumper extends Extension {
     });
   }
 
+  // The tabs are icons now, so labels alone would show almost nothing. Report
+  // any actor that carries identity (label text, a11y name) or geometry worth
+  // checking (icons, bars, tracks).
+  _describe(actor) {
+    const cls = String(actor.style_class || "");
+    const isIcon = actor instanceof St.Icon;
+    const isBar = /codexbar-(bar|tab|panel)-(track|fill)/.test(cls);
+    if (actor instanceof St.Label) return `label ${JSON.stringify(actor.text)}`;
+    if (isIcon) return `icon size=${actor.icon_size}`;
+    // Bars report geometry and a11y together: the accessible name is what the
+    // panel indicator sets, and it says which provider the bar is tracking.
+    if (isBar) {
+      const acc = actor.accessible_name ? ` a11y:${actor.accessible_name}` : "";
+      return `${cls} w=${this._widthOf(actor)}${acc}`;
+    }
+    if (actor.accessible_name) return `a11y:${actor.accessible_name}`;
+    return null;
+  }
+
   _walk(actor, depth, lines) {
     const pad = "  ".repeat(depth);
-    const text = actor instanceof St.Label ? actor.text : "";
-    const acc = actor.accessible_name ? `(a11y:${actor.accessible_name})` : "";
-    if (text || acc) {
-      const cls = actor.style_class ? `[${actor.style_class}]` : "";
-      lines.push(`${pad}${cls}${acc} ${JSON.stringify(text)}`);
+    const described = this._describe(actor);
+    if (described) {
+      const cls = actor.style_class ? `[${actor.style_class}] ` : "";
+      lines.push(`${pad}${cls}${described}`);
     }
     actor.get_children().forEach((c) => this._walk(c, depth + 1, lines));
   }
@@ -35,9 +64,29 @@ export default class CodexBarDumper extends Extension {
       return;
     }
 
+    // Read the setting straight from dconf so a mis-set value is visible rather
+// than inferred from the bar width. The target extension's own settings object
+// is not reachable from here.
+    try {
+      const source = Gio.SettingsSchemaSource.get_default();
+      const schema = source.lookup("org.gnome.shell.extensions.codexbar", true);
+      const settings = new Gio.Settings({ settings_schema: schema });
+      print(
+        `CODEXBAR-DUMP setting primary-provider=${JSON.stringify(settings.get_string("primary-provider"))}`,
+      );
+    } catch (e) {
+      print(`CODEXBAR-DUMP setting read failed: ${e.message}`);
+    }
+
     button.menu.open();
-    let lines = [];
+    const lines = [];
     this._walk(button.menu.actor, 0, lines);
+    lines.forEach((l) => print(`CODEXBAR-DUMP ${l}`));
+
+    // The panel indicator lives outside the menu, so dump it separately.
+    lines.length = 0;
+    this._walk(button.container.get_children()[0], 0, lines);
+    print("CODEXBAR-DUMP --- panel indicator ---");
     lines.forEach((l) => print(`CODEXBAR-DUMP ${l}`));
 
     // Click through each tab so every provider's rendering is covered. Buttons

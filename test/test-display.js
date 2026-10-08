@@ -1,20 +1,15 @@
-// Load-time tests for the display helpers in extension.js. These are exported
-// for testing; the shell imports the same module for the UI.
+// Load-time tests for the display helpers in extension.js.
+//
+// extension.js imports shell-only modules (St, PanelMenu, Main), so it cannot
+// be imported outside a shell. These tests read the source and evaluate just the
+// pure helpers and the sizing math, which keeps the whole thing runnable with a
+// bare `gjs -m`.
 import GLib from "gi://GLib";
 
-const EXT = GLib.filename_to_uri(
-  GLib.build_filenamev([GLib.get_current_dir(), "extension.js"]),
-  null,
-);
-
-// extension.js imports shell-only modules, so pull the pure helpers out of the
-// source instead of importing it. Keeps the test runnable outside a shell.
 const src = new TextDecoder().decode(
   GLib.file_get_contents(GLib.build_filenamev([GLib.get_current_dir(), "extension.js"]))[1],
 );
-const start = src.indexOf("function formatResetsIn");
-const end = src.indexOf("export default class");
-const helperSrc = src.slice(start, end);
+
 // The shell's gettext returns a string with String.prototype.format attached.
 // Stand in for it so the helpers under test behave as they do in the shell.
 // Positional args (%s, %d) consume the values in order, so "Resets in %dh %dm"
@@ -29,11 +24,9 @@ const gettext = (s) => {
   return str;
 };
 
-const factory = new Function(
-  "_",
-  `${helperSrc}; return { formatResetsIn, formatUpdated, formatPace, barColor };`,
-);
-const { formatResetsIn, formatUpdated, formatPace, barColor } = factory(gettext);
+const helperSrc = src.slice(src.indexOf("function formatResetsIn"), src.indexOf("export default class"));
+const helpers = new Function("_", `${helperSrc}; return { formatResetsIn, formatUpdated, formatPace, barColor, fillWidth };`)(gettext);
+const { formatResetsIn, formatUpdated, formatPace, barColor, fillWidth } = helpers;
 
 let failed = 0;
 let passed = 0;
@@ -89,6 +82,24 @@ check("low", barColor(10), "#3584e4");
 check("half", barColor(55), "#f6d32d");
 check("high", barColor(80), "#ff7800");
 check("critical", barColor(95), "#e01b24");
+
+// A 296px track is the popup content width minus padding.
+const TRACK = 296;
+
+console.log("fills size from the measured track, never as a percentage");
+check("empty", fillWidth(TRACK, 0), 1);
+check("half", fillWidth(TRACK, 50), 148);
+check("full", fillWidth(TRACK, 100), TRACK);
+check("six percent", fillWidth(TRACK, 6), 18);
+check("never zero", fillWidth(TRACK, 0.1), 1);
+check("zero-width track still shows something", fillWidth(0, 50), 1);
+
+console.log("the panel bar inset accounts for its border and padding");
+check("panel empty", fillWidth(18, 0, 4), 1);
+check("panel half", fillWidth(18, 50, 4), 7);
+check("panel full", fillWidth(18, 100, 4), 14);
+check("panel clamps over 100", fillWidth(18, 140, 4), 14);
+check("panel clamps below zero", fillWidth(18, -20, 4), 1);
 
 console.log("");
 console.log(`${passed} passed, ${failed} failed`);

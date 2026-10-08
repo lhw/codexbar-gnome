@@ -10,7 +10,7 @@ echo "Compiling schemas..."
 glib-compile-schemas schemas/
 
 echo "Running tests..."
-for t in test-parse test-cost test-display; do
+for t in test-parse test-cost test-display test-links; do
   result="$(gjs -m "test/$t.js" 2>&1 | sed 's/^Gjs-Console-Message: [0-9:.]* //' | tail -1)"
   echo "  $t: $result"
   case "$result" in
@@ -26,7 +26,9 @@ gnome-extensions pack \
     --extra-source=cli.js \
     --extra-source=parse.js \
     --extra-source=cost.js \
+    --extra-source=links.js \
     --extra-source=stylesheet.css \
+    --extra-source=media/ \
     --force
 
 echo "Packed ${UUID}.shell-extension.zip"

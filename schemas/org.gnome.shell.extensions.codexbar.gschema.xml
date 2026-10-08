@@ -12,5 +12,10 @@
       <summary>Show pace lines under usage meters</summary>
       <description>Whether to show whether a window is running ahead of or behind its expected pace.</description>
     </key>
+    <key name="primary-provider" type="s">
+      <default>''</default>
+      <summary>Provider tracked by the panel bar</summary>
+      <description>codexbar provider id (for example codex, claude, opencodego) whose usage fills the panel indicator. Empty means the first provider with usage data.</description>
+    </key>
   </schema>
 </schemalist>

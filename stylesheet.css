@@ -1,9 +1,25 @@
 /* CodexBar GNOME — default theme chrome, spacing and fill colours only.
    No backgrounds, borders or fonts: those come from the theme. */
 
-/* Tab strip */
+/* Panel indicator: a bar that fills as the primary provider burns through its
+   worst window. Widths of the fills are set in code, not here, because the
+   tracks have no layout manager. */
+.codexbar-panel-track {
+    width: 18px;
+    height: 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    padding: 1px;
+}
+
+.codexbar-panel-fill {
+    border-radius: 2px;
+}
+
+/* Provider tab strip. Icons only; the name is in the tooltip and the
+   accessible name. */
 .codexbar-tabs {
-    spacing: 4px;
+    spacing: 2px;
     padding: 8px 12px 0;
 }
 
@@ -17,18 +33,24 @@
     background-color: rgba(127, 127, 127, 0.15);
 }
 
-.codexbar-tab-label {
-    font-size: 0.85em;
+.codexbar-tab-active {
+    background-color: rgba(127, 127, 127, 0.22);
 }
 
-.codexbar-tab-label-active {
+.codexbar-provider-icon {
+    icon-size: 20px;
+}
+
+/* Fallback tile for providers with no bundled logo. */
+.codexbar-provider-letter {
     font-weight: bold;
+    text-align: center;
 }
 
-/* Per-tab load underline. Width is set inline as a percentage. */
+/* Per-tab load underline. */
 .codexbar-tab-track {
     height: 3px;
-    width: 100%;
+    width: 20px;
     border-radius: 2px;
     background-color: rgba(127, 127, 127, 0.25);
 }
@@ -38,15 +60,18 @@
     border-radius: 2px;
 }
 
+/* Marks the provider the panel bar tracks. */
+.codexbar-tab-primary-dot {
+    width: 4px;
+    height: 4px;
+    border-radius: 2px;
+    background-color: rgba(127, 127, 127, 0.55);
+}
+
 /* Provider content */
 .codexbar-content {
     padding: 10px 12px;
     spacing: 2px;
-}
-
-.codexbar-title {
-    font-size: 1.15em;
-    font-weight: bold;
 }
 
 .codexbar-section {
@@ -59,9 +84,13 @@
     font-size: 0.85em;
 }
 
-/* Usage meter. Width of the fill is set inline as a percentage. */
+/* Usage meter. */
 .codexbar-bar-track {
     height: 6px;
+    /* Keep in sync with BAR_WIDTH_PX in extension.js. Fills are computed from
+       this width in code, since a percentage width on a widget with no layout
+       manager resolves to nothing. */
+    width: 296px;
     border-radius: 3px;
     background-color: rgba(127, 127, 127, 0.25);
     margin-top: 4px;

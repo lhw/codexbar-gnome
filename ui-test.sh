@@ -6,6 +6,8 @@
 # tests cannot, and lets us assert on the exact strings the user sees.
 #
 # Usage: ./ui-test.sh [timeout-seconds]
+# Set CODEXBAR_TEST_PRIMARY=<provider id> to exercise the primary-provider
+# setting.
 
 set -u
 cd "$(dirname "$0")"
@@ -37,11 +39,24 @@ GET_ERRORS="gdbus call --session --dest org.gnome.Shell.Extensions --object-path
 
 echo "Running $UUID in a headless shell (timeout ${SECS}s)..."
 
+export CODEXBAR_DUMP_TARGET="$UUID"
+export GSETTINGS_SCHEMA_DIR="$EXT_ROOT/$UUID/schemas"
+
+# dconf is per-session, so a setting written outside the shell's session never
+# reaches it. The keyfile backend is a plain file both processes can see.
+#
+# XDG_CONFIG_HOME must stay the real one: codexbar resolves its own config from
+# it, and pointing it elsewhere silently reduces the fixture to one provider.
+export GSETTINGS_BACKEND=keyfile
+export GSETTINGS_BACKEND_KEYFILE="${GSETTINGS_BACKEND_KEYFILE:-/tmp/opencode/ui-test-settings}"
+
 timeout "$SECS" dbus-run-session -- bash -c "
-  export CODEXBAR_DUMP_TARGET='$UUID'
   gnome-shell --headless --wayland >/tmp/opencode/ui-shell.log 2>&1 &
   SHELL_PID=\$!
   sleep 9
+  if [ -n \"\${CODEXBAR_TEST_PRIMARY:-}\" ]; then
+    gsettings --schemadir '$GSETTINGS_SCHEMA_DIR' set org.gnome.shell.extensions.codexbar primary-provider \"\$CODEXBAR_TEST_PRIMARY\" 2>&1
+  fi
   $ENABLE_DUMPER
   $ENABLE_TARGET
   sleep 22

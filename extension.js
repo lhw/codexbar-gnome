@@ -1,9 +1,9 @@
 // GNOME Shell extension entry point.
 //
-// Widget layout follows the macOS CodexBar menu: a provider tab strip, the
-// active provider's window meters, an optional balance block, a cost summary,
-// then footer actions. Providers come from one `codexbar usage` call, so
-// nothing is configured by hand.
+// Widget layout follows the macOS CodexBar menu: a strip of provider icons,
+// the active provider's window meters, an optional balance block, a cost
+// summary, then footer actions. Providers come from one `codexbar usage` call,
+// so nothing is configured by hand.
 
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
@@ -18,14 +18,23 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { fetchCost, fetchUsage, findCodexBar } from "./cli.js";
 import { parseUsagePayload } from "./parse.js";
 import { formatMoney, formatTokens, parseCostPayload } from "./cost.js";
-
-const DEFAULT_REFRESH_MINUTES = 15;
+import { ABOUT_URL, ADD_ACCOUNT_URL, INSTALL_URL, statusUrl, usageUrl } from "./links.js";
 
 // Secondary text keeps the theme's foreground colour and is dimmed with actor
 // opacity. St has no CSS `opacity`, and a single extension stylesheet cannot
 // ship separate light and dark foregrounds.
 const SECONDARY_TEXT_OPACITY = 200;
 const FAINT_TEXT_OPACITY = 150;
+
+const TAB_ICON_SIZE = 20;
+const PANEL_ICON_WIDTH = 18;
+const PANEL_ICON_HEIGHT = 8;
+// Tab underline track. Matches TAB_ICON_SIZE so the bar sits exactly under the
+// icon.
+const TAB_TRACK_WIDTH = TAB_ICON_SIZE;
+// Popup bar track. The popup sets min-width 320px and the content box pads 12px
+// per side, leaving this. Kept in sync with stylesheet.css.
+const BAR_WIDTH_PX = 296;
 
 /**
  * Dimmed label.
@@ -49,8 +58,7 @@ function dimLabel(params) {
  */
 function formatResetsIn(iso, now = new Date()) {
   if (!iso) return "";
-  const target = new Date(iso);
-  const ms = target.getTime() - now.getTime();
+  const ms = new Date(iso).getTime() - now.getTime();
   if (!Number.isFinite(ms) || ms <= 0) return "";
 
   const totalMinutes = Math.round(ms / 60000);
@@ -91,9 +99,6 @@ function formatUpdated(iso, now = new Date()) {
  */
 function formatPace(pace, usedPercent) {
   if (!pace) return "";
-  const stage = pace.stage || "";
-  const delta = Math.round(Math.abs(Number(pace.deltaPercent) || 0));
-  const lasts = pace.willLastToReset === true;
 
   // Stages observed from the CLI: farAhead, slightlyAhead, ahead, behind,
   // slightlyBehind, farBehind.
@@ -104,18 +109,29 @@ function formatPace(pace, usedPercent) {
     farBehind: _("Far behind"),
     slightlyBehind: _("Slightly behind"),
     behind: _("Behind"),
-  }[stage];
+  }[pace.stage];
 
   const direction = Number(pace.deltaPercent) < 0 ? "-" : "+";
+  const delta = Math.round(Math.abs(Number(pace.deltaPercent) || 0));
   const head = lead ? _("Pace: %s").format(lead) : _("Pace: %d%%").format(usedPercent);
-  const tail = lasts
-    ? _("%s%d%% · Lasts to reset").format(direction, delta)
-    : _("%s%d%% · May run out").format(direction, delta);
+  const tail = lastsWord(pace.willLastToReset, direction, delta);
   return `${head} · ${tail}`;
 }
 
 /**
- * Threshold colour for a fill percentage. Matches the macOS app: green while
+ * @param {unknown} willLastToReset
+ * @param {string} direction "+" or "-".
+ * @param {number} delta
+ * @returns {string}
+ */
+function lastsWord(willLastToReset, direction, delta) {
+  return willLastToReset === true
+    ? _("%s%d%% · Lasts to reset").format(direction, delta)
+    : _("%s%d%% · May run out").format(direction, delta);
+}
+
+/**
+ * Threshold colour for a fill percentage. Matches the macOS app: blue while
  * there is room, amber then red as a window runs out.
  * @param {number} percent
  * @returns {string} Adwaita palette colour.
@@ -127,32 +143,59 @@ function barColor(percent) {
   return "#3584e4";
 }
 
+/**
+ * Pixel width for a fill inside a track of `trackWidth`.
+ *
+ * Tracks are plain St.Widgets with no layout manager, so a CSS percentage width
+ * resolves against an unallocated parent and the fill renders at zero width.
+ * Track widths are fixed constants (see BAR_WIDTH_PX) and fills are computed
+ * from them, so no measurement is needed.
+ *
+ * @param {number} trackWidth Track width in pixels.
+ * @param {number} percent 0 to 100.
+ * @param {number} inset Pixels reserved by the track's border and padding.
+ * @returns {number} At least 1, so a tiny usage still shows.
+ */
+function fillWidth(trackWidth, percent, inset = 0) {
+  const inner = Math.max(1, trackWidth - inset);
+  const clamped = Math.min(100, Math.max(0, Number(percent) || 0));
+  return Math.max(1, Math.round((inner * clamped) / 100));
+}
+
 export default class CodexBarExtension extends Extension {
   enable() {
     this._settings = this.getSettings();
 
     this._indicator = new PanelMenu.Button(0.0, _("CodexBar"), false);
-    this._panelIcon = new St.Icon({
-      icon_name: "utilities-system-monitor-symbolic",
-      style_class: "system-status-icon",
-    });
-    this._indicator.add_child(this._panelIcon);
 
-    // Tab strip, provider content, and footer, added to the menu's box so they
-    // span the full popup width rather than sitting in menu items.
+    // Panel indicator: a bar that fills as the primary provider burns through
+    // its worst window, matching the macOS menu bar icon.
+    this._panelTrack = new St.BoxLayout({
+      style_class: "codexbar-panel-track",
+      vertical: false,
+      x_align: Clutter.ActorAlign.CENTER,
+    });
+    this._panelFill = new St.Widget({
+      style_class: "codexbar-panel-fill",
+      height: PANEL_ICON_HEIGHT - 4,
+      width: 1,
+      x_align: Clutter.ActorAlign.START,
+    });
+    this._panelTrack.add_child(this._panelFill);
+    this._panelIcon = this._panelTrack;
+    this._indicator.add_child(this._panelTrack);
+
     this._tabsBox = new St.BoxLayout({ style_class: "codexbar-tabs" });
     this._contentBox = new St.BoxLayout({
       style_class: "codexbar-content",
       vertical: true,
       x_expand: true,
     });
-    // PopupMenuSection is not a St widget, so it cannot go in the menu box like
-    // the others. Keep it in the menu and let it sit below our content.
+    // The section's own actor has to join the menu box: addMenuItem fills the
+    // section's box, which renders only when the section is in the tree.
     this._footerBox = new PopupMenu.PopupMenuSection();
     this._indicator.menu.box.add_child(this._tabsBox);
     this._indicator.menu.box.add_child(this._contentBox);
-    // The section's own actor has to join the menu box: addMenuItem fills the
-    // section's box, which renders only when the section is in the tree.
     this._indicator.menu.box.add_child(this._footerBox.actor);
 
     this._providers = [];
@@ -170,6 +213,8 @@ export default class CodexBarExtension extends Extension {
       "changed::refresh-interval",
       () => this._setupTimer(),
       "changed::show-pace",
+      () => this._updateUI(),
+      "changed::primary-provider",
       () => this._updateUI(),
       this,
     );
@@ -200,6 +245,8 @@ export default class CodexBarExtension extends Extension {
     this._tabsBox = null;
     this._contentBox = null;
     this._footerBox = null;
+    this._panelTrack = null;
+    this._panelFill = null;
     this._providers = [];
     this._refreshing = false;
   }
@@ -258,12 +305,20 @@ export default class CodexBarExtension extends Extension {
         this._startTick();
       }
       if (this._activeIndex >= providers.length) this._activeIndex = 0;
-      this._updateUI();
+      try {
+        this._updateUI();
+      } catch (uiError) {
+        console.error(`[CodexBar] _updateUI failed: ${uiError}`);
+      }
     } catch (e) {
       if (this._cancellable?.is_cancelled() || !this._indicator) return;
       this._error = e.message || String(e);
       this._stale = this._providers.length > 0;
-      this._updateUI();
+      try {
+        this._updateUI();
+      } catch (uiError) {
+        console.error(`[CodexBar] _updateUI failed: ${uiError}`);
+      }
     } finally {
       this._refreshing = false;
     }
@@ -277,35 +332,92 @@ export default class CodexBarExtension extends Extension {
     if (this._tickId) GLib.Source.remove(this._tickId);
     this._tickId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
       this._updatePanelIcon();
-      // Only the countdown text needs recomputing, and only when open.
       if (this._indicator?.menu.isOpen) this._updateUI();
       return GLib.SOURCE_CONTINUE;
     });
   }
 
   /**
-   * Worst usage across the active provider's meters, for the panel icon.
+   * The provider the panel bar tracks. Falls back to the first provider with
+   * usage data when the configured one is missing or erroring.
+   * @returns {object|null}
+   */
+  _primaryProvider() {
+    if (this._providers.length === 0) return null;
+    const wanted = this._settings?.get_string("primary-provider") || "";
+    if (wanted) {
+      const match = this._providers.find((p) => p.id === wanted && p.kind !== "error");
+      if (match) return match;
+    }
+    return this._providers.find((p) => p.kind !== "error") || this._providers[0];
+  }
+
+  /**
+   * Worst usage across a provider's meters.
+   * @param {object} provider
    * @returns {number} 0 to 100.
    */
-  _activePercent() {
-    const provider = this._providers[this._activeIndex];
-    if (!provider) return 0;
+  _worstPercent(provider) {
     const meters = provider.windows.filter((w) => w.meter);
     if (meters.length === 0) return 0;
     return Math.max(...meters.map((w) => w.usedPercent));
   }
 
   _updatePanelIcon() {
-    if (!this._panelIcon) return;
-    if (this._error && this._providers.length === 0) {
-      this._panelIcon.icon_name = "dialog-error-symbolic";
-    } else {
-      this._panelIcon.icon_name = "utilities-system-monitor-symbolic";
+    if (!this._panelFill) return;
+
+    const provider = this._primaryProvider();
+    const percent = provider ? this._worstPercent(provider) : 0;
+
+    // Pixel widths, not percentages: the track has no layout manager, so a
+    // percentage fill would resolve against an unallocated parent and vanish.
+    this._panelFill.set_width(fillWidth(PANEL_ICON_WIDTH, percent, 4));
+    this._panelFill.set_style(`background-color: ${barColor(percent)};`);
+
+    this._panelTrack.opacity = this._stale || this._error ? FAINT_TEXT_OPACITY : 255;
+    this._panelTrack.accessible_name = provider
+      ? _("%s: %d%% used").format(provider.name, percent)
+      : _("CodexBar");
+  }
+
+  /**
+   * Provider logo as an St.Icon, falling back to a letter tile for providers
+   * with no bundled logo.
+   * @param {object} provider
+   * @param {number} size
+   * @returns {St.Widget}
+   */
+  _providerIcon(provider, size) {
+    const path = GLib.build_filenamev([
+      this.path,
+      "media",
+      "logos",
+      `${provider.id}-symbolic.svg`,
+    ]);
+
+    if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
+      return new St.Icon({
+        gicon: Gio.icon_new_for_string(path),
+        icon_size: size,
+        style_class: "codexbar-provider-icon",
+      });
     }
-    this._panelIcon.opacity = this._stale ? FAINT_TEXT_OPACITY : 255;
+
+    // No logo: a letter tile keeps the strip evenly spaced and still tells the
+    // providers apart at a glance.
+    const initial = (provider.name || provider.id || "?").trim().charAt(0).toUpperCase();
+    return new St.Label({
+      text: initial,
+      style_class: "codexbar-provider-letter",
+      y_align: Clutter.ActorAlign.CENTER,
+      width: size,
+      height: size,
+    });
   }
 
   _buildFooter() {
+    const providerId = () => this._providers[this._activeIndex]?.id || "";
+
     const add = (label, iconName, onActivate) => {
       const item = new PopupMenu.PopupMenuItem(label, {
         style_class: "codexbar-action",
@@ -320,7 +432,6 @@ export default class CodexBarExtension extends Extension {
       }
       item.connect("activate", onActivate);
       this._footerBox.addMenuItem(item);
-      return item;
     };
 
     const open = (uri) => () => {
@@ -328,9 +439,9 @@ export default class CodexBarExtension extends Extension {
       this._indicator.menu.close();
     };
 
-    add(_("Add Account..."), "list-add-symbolic", open("https://github.com/steipete/CodexBar#readme"));
-    add(_("Usage Dashboard"), "view-list-symbolic", open("https://github.com/steipete/CodexBar"));
-    add(_("Status Page"), "network-transmit-receive-symbolic", open("https://status.openai.com"));
+    add(_("Add Account..."), "list-add-symbolic", open(ADD_ACCOUNT_URL));
+    add(_("Usage Dashboard"), "view-list-symbolic", () => open(usageUrl(providerId()))());
+    add(_("Status Page"), "network-transmit-receive-symbolic", () => open(statusUrl(providerId()))());
     add(_("Refresh Now"), "view-refresh-symbolic", () => {
       this._indicator.menu.close();
       this._refresh();
@@ -342,6 +453,7 @@ export default class CodexBarExtension extends Extension {
 
     this._footerBox.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
+    add(_("About CodexBar"), "help-about-symbolic", open(ABOUT_URL));
     add(_("Quit"), "application-exit-symbolic", () => {
       this._indicator.menu.close();
       this.disable();
@@ -358,7 +470,7 @@ export default class CodexBarExtension extends Extension {
     if (!findCodexBar()) {
       this._contentBox.add_child(this._messageBox(
         _("codexbar not found"),
-        _("Install it with: brew install steipete/tap/codexbar"),
+        _("Install it, then refresh. See %s").replace("%s", INSTALL_URL),
       ));
       return;
     }
@@ -386,7 +498,20 @@ export default class CodexBarExtension extends Extension {
       return;
     }
 
-    this._contentBox.add_child(this._buildHeader(provider));
+    // The tab icons carry identity, so no repeated provider-name header here.
+    // The account and update stamp go on one compact line instead.
+    const meta = new St.BoxLayout({ x_expand: true });
+    const stamp = formatUpdated(provider.updatedAt) || _("Updating...");
+    if (provider.account) {
+      meta.add_child(dimLabel({
+        text: `${stamp} · ${provider.account}`,
+        x_align: Clutter.ActorAlign.START,
+        x_expand: true,
+      }));
+    } else {
+      meta.add_child(dimLabel({ text: stamp, x_expand: true }));
+    }
+    this._contentBox.add_child(meta);
 
     if (this._stale) {
       const stale = dimLabel({ text: _("Showing last known values") });
@@ -402,14 +527,15 @@ export default class CodexBarExtension extends Extension {
 
     if (this._cost) this._contentBox.add_child(this._buildCost());
 
-    // Bars are sized as a percentage of the track, so they fill whatever width
-    // the theme gives the popup. Ask for it explicitly, otherwise the menu
-    // shrinks to fit the widest child and long provider names stretch it.
+    // Bars are sized in pixels against the track, so the popup needs a fixed
+    // width to fill. Without it the menu shrinks to the widest label.
     this._contentBox.set_style("min-width: 320px;");
     this._tabsBox.set_style("min-width: 320px;");
   }
 
   _buildTabs() {
+    const primaryId = this._primaryProvider()?.id;
+
     this._providers.forEach((provider, index) => {
       const active = index === this._activeIndex;
 
@@ -419,38 +545,29 @@ export default class CodexBarExtension extends Extension {
         accessible_name: provider.name,
       });
 
-      const column = new St.BoxLayout({ vertical: true, y_align: Clutter.ActorAlign.CENTER });
-      column.add_child(
-        new St.Label({
-          text: provider.name,
-          style_class: active ? "codexbar-tab-label codexbar-tab-label-active" : "codexbar-tab-label",
-          y_align: Clutter.ActorAlign.CENTER,
-        }),
-      );
-
-      // The underline is the macOS touch: each tab carries its own load, so you
-      // can see which provider needs attention without switching to it. Balance
-      // providers have no usage meter, so their tab gets a dim full-width track
-      // instead of a misleading near-empty fill.
-      const meters = provider.windows.filter((w) => w.meter);
-      const isBalance = provider.kind === "balance";
-      const percent = meters.length
-        ? Math.max(...meters.map((w) => w.usedPercent))
-        : 0;
-
-      const track = new St.Widget({
-        style_class: "codexbar-tab-track",
+      const column = new St.BoxLayout({
+        vertical: true,
         y_align: Clutter.ActorAlign.CENTER,
       });
-      if (provider.kind !== "error") {
-        const fillPercent = isBalance ? 100 : percent;
-        track.add_child(
-          new St.Widget({
-            style_class: isBalance ? "codexbar-tab-fill codexbar-tab-fill-balance" : "codexbar-tab-fill",
-            style: `width: ${Math.max(2, Math.round(fillPercent))}%; background-color: ${isBalance ? "#77767b" : barColor(percent)};`,
-          }),
-        );
-      }
+      column.add_child(this._providerIcon(provider, TAB_ICON_SIZE));
+
+      // The underline is the macOS touch: each tab carries its own load, so
+      // you can see which provider needs attention without switching to it.
+      // Balance providers have no usage meter, so they get a dim full-width
+      // track rather than a misleading near-empty fill.
+      const isBalance = provider.kind === "balance";
+      const percent = isBalance ? 0 : this._worstPercent(provider);
+      const fillPercent = isBalance ? 100 : percent;
+
+      const track = new St.BoxLayout({ style_class: "codexbar-tab-track" });
+      track.add_child(
+        new St.Widget({
+          style_class: isBalance
+            ? "codexbar-tab-fill codexbar-tab-fill-balance"
+            : "codexbar-tab-fill",
+          style: `width: ${fillWidth(TAB_TRACK_WIDTH, fillPercent)}px; background-color: ${isBalance ? "#77767b" : barColor(percent)};`,
+        }),
+      );
       column.add_child(track);
       button.set_child(column);
 
@@ -459,35 +576,17 @@ export default class CodexBarExtension extends Extension {
         this._updateUI();
       });
       this._tabsBox.add_child(button);
+
+      // A dot marks which provider the panel bar is tracking.
+      if (provider.id === primaryId && this._providers.length > 1) {
+        this._tabsBox.add_child(
+          new St.Widget({
+            style_class: "codexbar-tab-primary-dot",
+            y_align: Clutter.ActorAlign.CENTER,
+          }),
+        );
+      }
     });
-  }
-
-  _buildHeader(provider) {
-    const box = new St.BoxLayout({ vertical: true, x_expand: true });
-
-    const titleRow = new St.BoxLayout({ x_expand: true });
-    titleRow.add_child(
-      new St.Label({
-        text: provider.name,
-        style_class: "codexbar-title",
-        x_expand: true,
-        y_align: Clutter.ActorAlign.CENTER,
-      }),
-    );
-    if (provider.account) {
-      titleRow.add_child(dimLabel({
-        text: provider.account,
-        x_align: Clutter.ActorAlign.END,
-        y_align: Clutter.ActorAlign.CENTER,
-      }));
-    }
-    box.add_child(titleRow);
-
-    box.add_child(dimLabel({
-      text: formatUpdated(provider.updatedAt) || _("Updating..."),
-    }));
-
-    return box;
   }
 
   /**
@@ -499,11 +598,11 @@ export default class CodexBarExtension extends Extension {
     const box = new St.BoxLayout({ vertical: true, x_expand: true });
     box.add_child(new St.Label({ text: window.label, style_class: "codexbar-section" }));
 
-    const track = new St.Widget({ style_class: "codexbar-bar-track" });
+    const track = new St.BoxLayout({ style_class: "codexbar-bar-track" });
     track.add_child(
       new St.Widget({
         style_class: "codexbar-bar-fill",
-        style: `width: ${Math.max(1, window.usedPercent)}%; background-color: ${barColor(window.usedPercent)};`,
+        style: `width: ${fillWidth(BAR_WIDTH_PX, window.usedPercent)}px; background-color: ${barColor(window.usedPercent)};`,
       }),
     );
     box.add_child(track);
@@ -566,7 +665,9 @@ export default class CodexBarExtension extends Extension {
 
     const row = (label, cost, tokens) => {
       const line = new St.BoxLayout({ x_expand: true });
-      line.add_child(dimLabel({ text: `${label}: ${formatMoney(cost, this._cost.currency)} · ${formatTokens(tokens)} tokens` }));
+      line.add_child(dimLabel({
+        text: `${label}: ${formatMoney(cost, this._cost.currency)} · ${formatTokens(tokens)} tokens`,
+      }));
       return line;
     };
 
@@ -582,10 +683,7 @@ export default class CodexBarExtension extends Extension {
    */
   _messageBox(title, detail) {
     const box = new St.BoxLayout({ vertical: true, x_expand: true });
-    box.add_child(new St.Label({
-      text: title,
-      style_class: "codexbar-section",
-    }));
+    box.add_child(new St.Label({ text: title, style_class: "codexbar-section" }));
     const detailLabel = dimLabel({ text: detail });
     detailLabel.clutter_text.line_wrap = true;
     box.add_child(detailLabel);
