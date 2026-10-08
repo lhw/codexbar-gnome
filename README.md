@@ -10,20 +10,27 @@ settings.
 
 ## Screenshots
 
-The popup, with OpenCode Go selected. Each bar carries a tick at the point where
-usage *should* be by now, so running hot is visible at a glance. A pace line
-appears only when a window is actually over-consumed, which here is all three.
+Each bar carries a tick at the point where usage *should* be by now, so running
+hot is visible at a glance. A pace line appears only when a window is actually
+over-consumed, which here is all three. The dot in the tab strip marks the
+provider the panel bar is tracking.
 
-![The popup menu: provider tabs with load underlines, three usage bars with pace ticks, and the footer actions](media/screenshots/popup.png)
-
-The tabs are provider logos, so the popup drops the big provider-name header. A
-dot in the strip marks the provider the panel bar is tracking. Balance providers
-such as DeepSeek show their value rather than an empty bar, because a balance has
-no percentage to draw:
-
-![The DeepSeek tab showing a balance value rather than a usage bar](media/screenshots/balance.png)
-
-![The Codex tab, with the account redacted](media/screenshots/codex.png)
+<table>
+  <tr>
+    <td align="center" valign="top">
+      <img src="media/screenshots/popup.png" width="300" alt="Popup with OpenCode Go selected: provider tabs with load underlines, three usage bars with pace ticks, and the footer actions"><br>
+      <sub><b>OpenCode Go</b><br>Three rate windows, all running hot</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="media/screenshots/balance.png" width="300" alt="DeepSeek tab showing a balance value rather than a usage bar"><br>
+      <sub><b>DeepSeek</b><br>A balance has no percentage, so it shows its value</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="media/screenshots/codex.png" width="300" alt="Codex tab with the account redacted"><br>
+      <sub><b>Codex</b><br>Weekly window, running under pace</sub>
+    </td>
+  </tr>
+</table>
 
 ## Install
 
