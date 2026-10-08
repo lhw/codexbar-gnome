@@ -131,8 +131,28 @@
     icon-size: 16px;
 }
 
-/* Credits line inside the About submenu: readable prose, not an action. */
-.codexbar-about-note {
-    font-size: 0.8em;
-    padding: 4px 6px 8px;
+/* About dialog. Spacing only: the shell themes the dialog chrome, and
+   .shell-link already gives the links their colour. */
+.codexbar-about-box {
+    spacing: 8px;
+}
+
+.codexbar-about-heading {
+    font-weight: bold;
+    padding-top: 10px;
+}
+
+.codexbar-about-body {
+    padding-right: 4px;
+}
+
+.codexbar-about-row {
+    spacing: 0;
+    padding-bottom: 4px;
+}
+
+/* A button adds padding and a focus ring around a bare URL. */
+.codexbar-about-link {
+    padding: 0;
+    text-align: left;
 }

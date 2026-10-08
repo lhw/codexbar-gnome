@@ -13,6 +13,7 @@ import Clutter from "gi://Clutter";
 import { Extension, gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
+import { ModalDialog } from "resource:///org/gnome/shell/ui/modalDialog.js";
 import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 
 import { fetchCost, fetchUsage, findCodexBar } from "./cli.js";
@@ -503,43 +504,103 @@ export default class CodexBarExtension extends Extension {
     // No Quit item: this is an extension, not an application, so there is no
     // process to exit. Disabling is the shell's job, via the Extensions app or
     // `gnome-extensions disable`.
-    this._buildAboutMenu();
+    add(_("About CodexBar"), "help-about-symbolic", () => {
+      this._indicator.menu.close();
+      this._showAbout();
+    });
   }
 
   /**
-   * "About CodexBar" opens a submenu rather than a page, so the credits and the
-   * project links live in the shell instead of bouncing out to a browser.
+   * Show the credits and project links as a shell modal dialog.
+   *
+   * A GTK window cannot be opened from here. The shell never runs a GTK main
+   * loop, and calling Gtk.init() from an extension takes the compositor down
+   * with it. A modal dialog is the shell's own dialog and comes themed, so
+   * nothing about its appearance is styled here.
    */
-  _buildAboutMenu() {
-    const open = (uri) => () => {
-      Gio.AppInfo.launch_default_for_uri(uri, null);
-      this._indicator.menu.close();
+  _showAbout() {
+    let meta;
+    try {
+      meta = JSON.parse(
+        new TextDecoder().decode(
+          GLib.file_get_contents(
+            GLib.build_filenamev([this.path, "metadata.json"]),
+          )[1],
+        ),
+      );
+    } catch (e) {
+      console.error(`[CodexBar] could not read metadata.json: ${e}`);
+      return;
+    }
+
+    const heading = (text) =>
+      new St.Label({ text, style_class: "codexbar-about-heading" });
+
+    // line_wrap so a long URL wraps instead of running past the dialog, which
+    // the shell's own 28em content limit is narrower than some of them. It lives
+    // on the Clutter.Text, not on StLabel.
+    const body = (text) => {
+      const label = new St.Label({ text, style_class: "codexbar-about-body" });
+      label.clutter_text.line_wrap = true;
+      return label;
     };
 
-    const submenu = new PopupMenu.PopupSubMenuMenuItem(_("About CodexBar"), true);
-    // PopupSubMenuMenuItem builds its own ornament; leave it alone.
-
-    const item = (label, uri) => {
-      const entry = new PopupMenu.PopupMenuItem(label, {
-        style_class: "codexbar-action",
+    // The clickable part is the human label, not the URL. A button's label is
+    // single-line, and the longest URL is wider than the dialog, whereas the
+    // body text wraps. Attribution lives in the credits below rather than on
+    // each row, which keeps every button short.
+    const linkRow = (label, url) => {
+      const row = new St.BoxLayout({
+        vertical: true,
+        style_class: "codexbar-about-row",
       });
-      entry.connect("activate", open(uri));
-      submenu.menu.addMenuItem(entry);
+
+      // shell-link is the shell theme's own link style, so the link matches the
+      // desktop without this extension picking a colour.
+      const link = new St.Button({
+        label,
+        style_class: "shell-link codexbar-about-link",
+      });
+      link.connect("clicked", () => Gio.AppInfo.launch_default_for_uri(url, null));
+      row.add_child(link);
+      row.add_child(body(url));
+      return row;
     };
 
-    item(_("This extension"), EXTENSION_REPO_URL);
-    item(_("codexbar CLI"), CLI_REPO_URL);
-    item(_("Upstream extension"), FORK_ORIGIN_URL);
-    item(_("Upstream on extensions.gnome.org"), FORK_ORIGIN_EXTENSION_URL);
-    item(_("License"), LICENSE_URL);
+    const box = new St.BoxLayout({
+      vertical: true,
+      style_class: "codexbar-about-box",
+    });
 
-    const note = new PopupMenu.PopupMenuItem(
-      _("A fork of the extension by @inled.es, published as 9841 and linked from the CodexBar README. Rewritten around a single CLI call."),
-      { style_class: "codexbar-about-note", reactive: false },
-    );
-    submenu.menu.addMenuItem(note);
+    box.add_child(heading(meta.name));
+    box.add_child(body(`${_("Version")} ${meta.version}  ·  ${meta.uuid}`));
+    box.add_child(body(meta.description));
 
-    this._footerBox.addMenuItem(submenu);
+    box.add_child(heading(_("Links")));
+    box.add_child(linkRow(_("This extension"), EXTENSION_REPO_URL));
+    box.add_child(linkRow(_("codexbar CLI"), CLI_REPO_URL));
+    box.add_child(linkRow(_("Upstream extension"), FORK_ORIGIN_URL));
+    box.add_child(linkRow(_("Upstream on extensions.gnome.org"), FORK_ORIGIN_EXTENSION_URL));
+    box.add_child(linkRow(_("License"), LICENSE_URL));
+
+    box.add_child(heading(_("Credits")));
+    box.add_child(body(_(
+      "A fork of the extension by @inled.es, published as extension 9841 and " +
+      "linked from the codexbar README. This fork was rewritten around a single " +
+      "CLI call, so much of the original implementation no longer applies; the " +
+      "commit history has the detail. Provider logos come from the codexbar logo " +
+      "set, converted to GNOME symbolic icons so they follow the active theme. " +
+      "MIT licence, inherited from upstream.",
+    )));
+
+    const dialog = new ModalDialog({ styleClass: "codexbar-about-dialog" });
+    dialog.contentLayout.add_child(box);
+    dialog.setButtons([{
+      label: _("Close"),
+      action: () => dialog.close(),
+      key: Clutter.KEY_Escape,
+    }]);
+    dialog.open();
   }
 
   _updateUI() {

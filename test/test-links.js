@@ -72,7 +72,7 @@ check("opencodego usage", usageUrl("opencodego"), "https://opencode.ai/console/g
 check("deepseek usage", usageUrl("deepseek"), "https://platform.deepseek.com/usage");
 check("claude usage", usageUrl("claude"), "https://claude.ai/settings/usage");
 
-console.log("the About submenu links are all real https URLs");
+console.log("the About dialog links are all real https URLs");
 const about = {
   "this extension": EXTENSION_REPO_URL,
   "cli repo": CLI_REPO_URL,

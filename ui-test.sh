@@ -90,12 +90,16 @@ else
 fi
 
 echo "=== extension errors ==="
-# An empty array means the shell loaded and enabled it cleanly.
-ERRORS="$(grep -F '(@as [],)' "${TMPDIR:-/tmp}/codexbar-ui-errors.txt" 2>/dev/null)"
-if [ -n "$ERRORS" ]; then
+# dbus-run-session only relays its own diagnostics, so a JS error inside the shell
+# process appears in the shell log and nowhere else. Scan both, or a thrown
+# exception reads as a clean run.
+ERRORS="$(cat "${TMPDIR:-/tmp}/codexbar-ui-errors.txt" "${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>/dev/null \
+  | grep -E "JS ERROR|Extension ($UUID|$DUMPER_UUID):" \
+  | grep -viE "libmutter|meta_monitor|meta_workspace" | head -20)"
+if [ -z "$ERRORS" ] && grep -qF '(@as [],)' "${TMPDIR:-/tmp}/codexbar-ui-errors.txt"; then
   echo "clean"
 else
-  cat "${TMPDIR:-/tmp}/codexbar-ui-errors.txt" 2>/dev/null || echo "(shell did not report)"
+  echo "$ERRORS"
 fi
 
 # Shell log lines naming the extension, minus the mutter warnings that every

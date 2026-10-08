@@ -90,6 +90,9 @@ usage data.
 - No Sonnet or Extra usage rows. Those come from Claude-specific fields that the
   current CLI does not expose; they will appear if a provider reports them.
 
+About CodexBar opens a dialog in the shell with the version, links to every
+project, and the credits below.
+
 ## Credits
 
 Fork of [InledGroup/codexbar-gnome](https://github.com/InledGroup/codexbar-gnome),

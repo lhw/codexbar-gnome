@@ -61,8 +61,26 @@ caught.
 
 ## GJS and St traps
 
-These cost real debugging time. All four bit during development.
+These cost real debugging time. All of them bit during development.
 
+- **`Gtk.init()` from an extension kills the compositor.** The shell runs a
+  `GLib.MainLoop`, never a GTK one. So there is no GTK or Adw dialog to be had
+  from the shell process, and the About dialog is a `ModalDialog` instead, which
+  is the shell's own dialog and comes themed. Assert this before repeating it:
+  probe from a companion extension, not by reasoning about it.
+- **`Dialog.MessageDialogContent.description` takes a string, not an actor** in
+  GNOME 50, and its buttons live on `ModalDialog`, not on the content. For
+  anything richer than a title and a paragraph, add your own actor to
+  `dialog.contentLayout`.
+- **`St.Label` has no `line_wrap` property.** It is on the `Clutter.Text`:
+  `label.clutter_text.line_wrap = true`. Without it a long URL runs past the
+  dialog's 28em content limit.
+- **`St.Button.label` is null in GNOME 50.** The text is the button's child, so
+  read `get_first_child()?.text`. A button's label is also single-line, so put
+  wrapping text in an `St.Label` next to it rather than in the button.
+- **`new Clutter.Event(...)` throws** — it has no default constructor. So
+  `PopupBaseMenuItem.activate()` cannot be synthesised and the dumper calls the
+  handler directly instead.
 - **`read_bytes_finish` returns a single `GLib.Bytes`, not an `[ok, bytes]`
   tuple.** `const [ok, bytes] = ...` throws "not iterable" inside the callback,
   which fails silently wherever the callback's result is ignored.
@@ -115,6 +133,11 @@ cd /tmp/ziptest && unzip -q ~/src/codexbar-gnome/codexbar-gnome/*.zip && ls -R
 - **`org.gnome.Shell.Eval` is unavailable** unless the session runs in unsafe
   mode. To inspect shell internals, probe from a companion extension instead,
   which is what `test/dumper` is for.
+- **Shell-process JS errors only appear in the shell log, not the errors file.**
+  `ui-test.sh` redirects `gnome-shell` output to `codexbar-ui-shell.log`, so
+  `codexbar-ui-errors.txt` only ever sees what `dbus-run-session` itself printed.
+  An earlier check grepped only that file and reported "clean" while the dumper
+  was throwing. The check scans both now.
 - **Code changes need a logout to take effect.** GNOME Shell caches extension
   ES modules for the session, so disable/enable over D-Bus silently serves stale
   code. A file that throws on enable will still "load" if this bites. Use

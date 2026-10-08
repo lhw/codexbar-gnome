@@ -35,6 +35,13 @@ export default class CodexBarDumper extends Extension {
     const isBar = /codexbar-(bar|tab|panel)-(track|fill|marker)/.test(cls);
     const isSub = actor instanceof PopupMenu.PopupSubMenuMenuItem;
     if (actor instanceof St.Label) return `label ${JSON.stringify(actor.text)}`;
+    // Buttons carry their text as a label child, not as a text property, and
+    // St.Button.label is null in GNOME 50, so read the child. The width matters
+    // too: text wider than the dialog would run past its edge.
+    if (actor instanceof St.Button) {
+      const text = actor.get_first_child()?.text;
+      return `button ${JSON.stringify(text ?? null)} ${this._sizeOf(actor)}`;
+    }
     if (isSub) return `SUBMENU ${JSON.stringify(actor.label.text)}`;
     if (isIcon) return `icon size=${actor.icon_size}`;
     // Bars report geometry, x offset, and a11y together. The x offset matters:
@@ -149,7 +156,24 @@ export default class CodexBarDumper extends Extension {
     countTabs(button.menu.actor);
     for (let i = 0; i < count.length; i++) clickTab(i);
 
-    button.menu.close();
+    // The About dialog is a modal outside the menu's actor tree. Activating the
+    // menu item is not an option: `activate` needs a real ClutterEvent, which
+    // cannot be constructed. Call the handler directly instead, which is the
+    // same reach this harness already has into the widget tree.
+    try {
+      const target = Extension.lookupByUUID(uuid);
+      target._showAbout();
+      const dialogLines = [];
+      Main.layoutManager.modalDialogGroup.get_children().forEach((dlg) => {
+        this._walk(dlg, 0, dialogLines);
+        dialogLines.push(`  width=${Math.round(dlg.get_width())}`);
+      });
+      print("CODEXBAR-DUMP --- about dialog ---");
+      dialogLines.forEach((l) => print(`CODEXBAR-DUMP ${l}`));
+    } catch (e) {
+      print(`CODEXBAR-DUMP --- about dialog --- THREW ${e.message}`);
+      print(`CODEXBAR-DUMP --- about stack --- ${e.stack}`);
+    }
     print("CODEXBAR-DUMP-END");
   }
 
