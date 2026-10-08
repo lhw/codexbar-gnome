@@ -3,13 +3,12 @@
 
 /* Panel indicator: a bar that fills as the primary provider burns through its
    worst window. Widths of the fills are set in code, not here, because the
-   tracks have no layout manager. */
+   tracks have no layout manager. Dimensions mirror PANEL_BAR_WIDTH and
+   PANEL_BAR_HEIGHT in extension.js; the properties are set there too so the
+   panel button cannot stretch them to the full panel height. */
 .codexbar-panel-track {
-    width: 18px;
-    height: 8px;
-    border-radius: 4px;
+    border-radius: 3px;
     border: 1px solid rgba(255, 255, 255, 0.75);
-    padding: 1px;
 }
 
 .codexbar-panel-fill {
@@ -38,7 +37,8 @@
 }
 
 .codexbar-provider-icon {
-    icon-size: 20px;
+    /* Mirrors TAB_ICON_SIZE in extension.js. */
+    icon-size: 26px;
 }
 
 /* Fallback tile for providers with no bundled logo. */
@@ -50,7 +50,8 @@
 /* Per-tab load underline. */
 .codexbar-tab-track {
     height: 3px;
-    width: 20px;
+    /* Mirrors TAB_TRACK_WIDTH in extension.js. */
+    width: 26px;
     border-radius: 2px;
     background-color: rgba(127, 127, 127, 0.25);
 }

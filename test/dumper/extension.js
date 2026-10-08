@@ -35,14 +35,28 @@ export default class CodexBarDumper extends Extension {
     const isBar = /codexbar-(bar|tab|panel)-(track|fill)/.test(cls);
     if (actor instanceof St.Label) return `label ${JSON.stringify(actor.text)}`;
     if (isIcon) return `icon size=${actor.icon_size}`;
-    // Bars report geometry and a11y together: the accessible name is what the
-    // panel indicator sets, and it says which provider the bar is tracking.
+    // Bars report geometry and a11y together. Height matters as much as width:
+    // a panel indicator taller than its neighbours is the obvious defect, and
+    // only the real allocation shows it.
     if (isBar) {
       const acc = actor.accessible_name ? ` a11y:${actor.accessible_name}` : "";
-      return `${cls} w=${this._widthOf(actor)}${acc}`;
+      return `${cls} ${this._sizeOf(actor)}${acc}`;
     }
     if (actor.accessible_name) return `a11y:${actor.accessible_name}`;
     return null;
+  }
+
+  // Natural size, i.e. what the style asks for before allocation.
+  _sizeOf(actor) {
+    return `${this._widthOf(actor)}x${this._heightOf(actor)}`;
+  }
+
+  _heightOf(actor) {
+    try {
+      return Math.round(actor.get_height());
+    } catch (e) {
+      return -1;
+    }
   }
 
   _walk(actor, depth, lines) {

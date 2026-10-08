@@ -5,3 +5,4 @@ schemas/gschemas.compiled
 # OS files
 .DS_Store
 Thumbs.db
+# ui-test scratch

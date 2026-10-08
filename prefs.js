@@ -8,40 +8,70 @@ import {
   gettext as _,
 } from "resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js";
 
-// Runs the CLI synchronously and returns its JSON, or an empty array on failure.
-// The prefs window is a normal process, so a blocking call is fine here.
-function fetchUsageSync() {
-  const source = GLib.getenv("PATH") || "";
+/**
+ * Locate the codexbar binary. PATH first, then the usual install locations,
+ * since a GUI session's PATH often misses Homebrew.
+ * @returns {string|null}
+ */
+function findCodexBar() {
+  const fromPath = GLib.find_program_in_path("codexbar");
+  if (fromPath) return fromPath;
+
   const candidates = [
-    "codexbar",
     GLib.build_filenamev([GLib.get_home_dir(), ".local", "bin", "codexbar"]),
     "/home/linuxbrew/.linuxbrew/bin/codexbar",
     "/usr/local/bin/codexbar",
     "/usr/bin/codexbar",
   ];
+  return candidates.find((p) => GLib.file_test(p, GLib.FileTest.EXISTS)) || null;
+}
 
-  for (const bin of candidates) {
-    const path = bin.includes("/") ? bin : GLib.find_program_in_path(bin);
-    if (!path || !GLib.file_test(path, GLib.FileTest.IS_EXECUTABLE)) continue;
-
-    try {
-      const [ok, stdout] = GLib.spawn_sync(
-        null,
-        [path, "usage", "--format", "json"],
-        null,
-        GLib.SpawnFlags.SEARCH_PATH,
-        null,
-      );
-      if (!ok) continue;
-      const text = new TextDecoder().decode(stdout).trim();
-      if (!text) continue;
-      const parsed = JSON.parse(text);
-      if (Array.isArray(parsed)) return parsed;
-    } catch (e) {
-      // Try the next candidate.
-    }
+/**
+ * Run `codexbar usage --format json` in the background.
+ *
+ * The CLI takes several seconds because it queries each provider, so it must
+ * never run on the main loop: doing so freezes the window before it paints.
+ *
+ * @param {(ids: string[]) => void} onDone Receives provider ids, empty on failure.
+ */
+function fetchProvidersAsync(onDone) {
+  const bin = findCodexBar();
+  if (!bin) {
+    onDone([]);
+    return;
   }
-  return [];
+
+  let proc;
+  try {
+    proc = Gio.Subprocess.new(
+      [bin, "usage", "--format", "json"],
+      Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
+    );
+  } catch (e) {
+    onDone([]);
+    return;
+  }
+
+  proc.get_stdout_pipe().read_bytes_async(
+    4 * 1024 * 1024,
+    GLib.PRIORITY_DEFAULT,
+    null,
+    (stream, result) => {
+      let ids = [];
+      try {
+        const [ok, bytes] = stream.read_bytes_finish(result);
+        const parsed = ok && bytes.length ? JSON.parse(new TextDecoder().decode(bytes)) : [];
+        // Keep the order the CLI reported, and skip providers that errored: the
+        // panel bar cannot track those.
+        ids = (Array.isArray(parsed) ? parsed : [])
+          .filter((entry) => entry?.provider && !entry.error)
+          .map((entry) => String(entry.provider));
+      } catch (e) {
+        ids = [];
+      }
+      onDone(ids);
+    },
+  );
 }
 
 export default class CodexBarPreferences extends ExtensionPreferences {
@@ -75,30 +105,52 @@ export default class CodexBarPreferences extends ExtensionPreferences {
     settings.bind("show-pace", pace, "active", Gio.SettingsBindFlags.DEFAULT);
     usage.add(pace);
 
-    // The panel bar tracks one provider. Populate from the CLI so the list
-    // matches what is actually enabled.
+    // The panel bar tracks one provider. The list comes from the CLI, which is
+    // slow, so the row starts disabled and fills in when the call returns.
+    const ids = [];
     const models = new Gtk.StringList();
     models.append(_("Automatic (first provider with usage)"));
-    const ids = [];
-    for (const entry of fetchUsageSync()) {
-      if (!entry?.provider || entry.error) continue;
-      const id = String(entry.provider);
-      ids.push(id);
-      models.append(id);
-    }
 
     const primary = new Adw.ComboRow({
       title: _("Panel bar tracks"),
-      subtitle: _("Which provider fills the indicator in the top panel"),
+      subtitle: _("Reading providers..."),
       model: models,
-      selected: Math.max(0, ids.indexOf(settings.get_string("primary-provider")) + 1),
+      sensitive: false,
+      selected: 0,
     });
+
     primary.connect("notify::selected", () => {
       const index = primary.selected;
       // Index 0 is the automatic option, which stores an empty string.
       settings.set_string("primary-provider", index > 0 ? ids[index - 1] : "");
     });
     usage.add(primary);
+
+    fetchProvidersAsync((providerIds) => {
+      providerIds.forEach((id) => {
+        ids.push(id);
+        models.append(id);
+      });
+
+      if (providerIds.length === 0) {
+        primary.subtitle = _("Could not read providers from codexbar");
+        return;
+      }
+
+      const current = settings.get_string("primary-provider");
+      const found = ids.indexOf(current);
+      // Keep an unknown stored value visible rather than silently reverting it.
+      if (found === -1 && current !== "") {
+        ids.push(current);
+        models.append(`${current} (${_("not enabled")})`);
+        primary.selected = ids.length;
+      } else {
+        primary.selected = found + 1;
+      }
+
+      primary.subtitle = _("Which provider fills the indicator in the top panel");
+      primary.sensitive = true;
+    });
 
     page.add(usage);
 

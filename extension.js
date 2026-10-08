@@ -26,12 +26,16 @@ import { ABOUT_URL, ADD_ACCOUNT_URL, INSTALL_URL, statusUrl, usageUrl } from "./
 const SECONDARY_TEXT_OPACITY = 200;
 const FAINT_TEXT_OPACITY = 150;
 
-const TAB_ICON_SIZE = 20;
-const PANEL_ICON_WIDTH = 18;
-const PANEL_ICON_HEIGHT = 8;
-// Tab underline track. Matches TAB_ICON_SIZE so the bar sits exactly under the
-// icon.
+// Tab logos. The macOS app shows these large enough to recognise at a glance.
+const TAB_ICON_SIZE = 26;
 const TAB_TRACK_WIDTH = TAB_ICON_SIZE;
+
+// Panel indicator. The GNOME top panel is 32px tall with 16px icons; a bar
+// indicator has to sit inside that, so the whole widget including its border
+// stays under the icon height.
+const PANEL_BAR_WIDTH = 16;
+const PANEL_BAR_HEIGHT = 5;
+const PANEL_BAR_INSET = 2; // 1px border plus 0px padding per side.
 // Popup bar track. The popup sets min-width 320px and the content box pads 12px
 // per side, leaving this. Kept in sync with stylesheet.css.
 const BAR_WIDTH_PX = 296;
@@ -169,15 +173,21 @@ export default class CodexBarExtension extends Extension {
     this._indicator = new PanelMenu.Button(0.0, _("CodexBar"), false);
 
     // Panel indicator: a bar that fills as the primary provider burns through
-    // its worst window, matching the macOS menu bar icon.
+    // its worst window, matching the macOS menu bar icon. Height is set here
+    // rather than only in CSS because the panel button stretches its child to
+    // the full 32px panel height, which is what made the bar tower over its
+    // neighbours.
     this._panelTrack = new St.BoxLayout({
       style_class: "codexbar-panel-track",
       vertical: false,
       x_align: Clutter.ActorAlign.CENTER,
+      y_align: Clutter.ActorAlign.CENTER,
+      height: PANEL_BAR_HEIGHT,
+      width: PANEL_BAR_WIDTH,
     });
     this._panelFill = new St.Widget({
       style_class: "codexbar-panel-fill",
-      height: PANEL_ICON_HEIGHT - 4,
+      height: PANEL_BAR_HEIGHT - PANEL_BAR_INSET,
       width: 1,
       x_align: Clutter.ActorAlign.START,
     });
@@ -371,7 +381,7 @@ export default class CodexBarExtension extends Extension {
 
     // Pixel widths, not percentages: the track has no layout manager, so a
     // percentage fill would resolve against an unallocated parent and vanish.
-    this._panelFill.set_width(fillWidth(PANEL_ICON_WIDTH, percent, 4));
+    this._panelFill.set_width(fillWidth(PANEL_BAR_WIDTH, percent, PANEL_BAR_INSET));
     this._panelFill.set_style(`background-color: ${barColor(percent)};`);
 
     this._panelTrack.opacity = this._stale || this._error ? FAINT_TEXT_OPACITY : 255;

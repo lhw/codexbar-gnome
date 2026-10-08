@@ -48,10 +48,10 @@ export GSETTINGS_SCHEMA_DIR="$EXT_ROOT/$UUID/schemas"
 # XDG_CONFIG_HOME must stay the real one: codexbar resolves its own config from
 # it, and pointing it elsewhere silently reduces the fixture to one provider.
 export GSETTINGS_BACKEND=keyfile
-export GSETTINGS_BACKEND_KEYFILE="${GSETTINGS_BACKEND_KEYFILE:-/tmp/opencode/ui-test-settings}"
+export GSETTINGS_BACKEND_KEYFILE="${GSETTINGS_BACKEND_KEYFILE:-${TMPDIR:-/tmp}/codexbar-ui-test-settings}"
 
 timeout "$SECS" dbus-run-session -- bash -c "
-  gnome-shell --headless --wayland >/tmp/opencode/ui-shell.log 2>&1 &
+  gnome-shell --headless --wayland >"${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>&1 &
   SHELL_PID=\$!
   sleep 9
   if [ -n \"\${CODEXBAR_TEST_PRIMARY:-}\" ]; then
@@ -62,33 +62,33 @@ timeout "$SECS" dbus-run-session -- bash -c "
   sleep 22
   $GET_ERRORS
   kill \$SHELL_PID 2>/dev/null
-" 2>&1 | grep -E "^\(" > /tmp/opencode/ui-errors.txt
+" 2>&1 | grep -E "^\(" > "${TMPDIR:-/tmp}/codexbar-ui-errors.txt"
 
 echo "=== menu tree ==="
-sed -n '/CODEXBAR-DUMP-START/,/CODEXBAR-DUMP-END/p' /tmp/opencode/ui-shell.log 2>/dev/null \
+sed -n '/CODEXBAR-DUMP-START/,/CODEXBAR-DUMP-END/p' "${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>/dev/null \
   | sed 's/^.*CODEXBAR-DUMP-START.*/CODEXBAR-DUMP-START/; s/^.*CODEXBAR-DUMP-END.*/CODEXBAR-DUMP-END/; s/^.*CODEXBAR-DUMP //' \
   | grep -vE "^$|libmutter|meta_monitor|meta_workspace"
 
-if grep -q "CODEXBAR-DUMP-START" /tmp/opencode/ui-shell.log 2>/dev/null; then
+if grep -q "CODEXBAR-DUMP-START" "${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>/dev/null; then
   echo "dump captured"
 else
   echo "NO DUMP CAPTURED"
-  grep -iE "$UUID|CODEXBAR|CRITICAL|WARNING.*[Ee]xtension" /tmp/opencode/ui-shell.log 2>/dev/null | head -20
+  grep -iE "$UUID|CODEXBAR|CRITICAL|WARNING.*[Ee]xtension" "${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>/dev/null | head -20
 fi
 
 echo "=== extension errors ==="
 # An empty array means the shell loaded and enabled it cleanly.
-ERRORS="$(grep -F '(@as [],)' /tmp/opencode/ui-errors.txt 2>/dev/null)"
+ERRORS="$(grep -F '(@as [],)' "${TMPDIR:-/tmp}/codexbar-ui-errors.txt" 2>/dev/null)"
 if [ -n "$ERRORS" ]; then
   echo "clean"
 else
-  cat /tmp/opencode/ui-errors.txt 2>/dev/null || echo "(shell did not report)"
+  cat "${TMPDIR:-/tmp}/codexbar-ui-errors.txt" 2>/dev/null || echo "(shell did not report)"
 fi
 
 # Shell log lines naming the extension, minus the mutter warnings that every
 # headless run emits regardless of the extension.
 echo "=== extension log lines ==="
-grep -iE "$UUID" /tmp/opencode/ui-shell.log 2>/dev/null \
+grep -iE "$UUID" "${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>/dev/null \
   | grep -viE "libmutter|meta_monitor|meta_workspace" | head -20
 
 rm -rf "$EXT_ROOT/$DUMPER_UUID"
