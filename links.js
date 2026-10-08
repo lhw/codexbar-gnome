@@ -100,11 +100,17 @@ export const STATUS_URLS = {
 // all of them; the CLI owns the config format.
 export const ADD_ACCOUNT_URL = "https://github.com/steipete/CodexBar/blob/main/docs/configuration.md";
 
-// The project's own site, for "About".
-export const ABOUT_URL = "https://codexbar.app";
-
 // Only reachable when codexbar itself is missing, so this is the install hint.
 export const INSTALL_URL = "https://github.com/steipete/CodexBar#installation";
+
+// This extension's repository, and the two projects it stands on: the CLI it
+// reads, and the extension it was forked from.
+export const EXTENSION_REPO_URL = "https://github.com/lhw/codexbar-gnome";
+export const CLI_REPO_URL = "https://github.com/steipete/CodexBar";
+export const FORK_ORIGIN_URL = "https://github.com/InledGroup/codexbar-gnome";
+export const FORK_ORIGIN_EXTENSION_URL =
+  "https://extensions.gnome.org/extension/9841/codexbar/";
+export const LICENSE_URL = `${EXTENSION_REPO_URL}/blob/main/LICENSE.md`;
 
 const FALLBACK_DASHBOARD = "https://codexbar.app";
 

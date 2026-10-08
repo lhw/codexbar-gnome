@@ -4,6 +4,7 @@
 import GLib from "gi://GLib";
 import St from "gi://St";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
+import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
 
 export default class CodexBarDumper extends Extension {
@@ -32,7 +33,9 @@ export default class CodexBarDumper extends Extension {
     const cls = String(actor.style_class || "");
     const isIcon = actor instanceof St.Icon;
     const isBar = /codexbar-(bar|tab|panel)-(track|fill|marker)/.test(cls);
+    const isSub = actor instanceof PopupMenu.PopupSubMenuMenuItem;
     if (actor instanceof St.Label) return `label ${JSON.stringify(actor.text)}`;
+    if (isSub) return `SUBMENU ${JSON.stringify(actor.label.text)}`;
     if (isIcon) return `icon size=${actor.icon_size}`;
     // Bars report geometry, x offset, and a11y together. The x offset matters:
     // the pace tick overlaps the fill inside one track, so a tick positioned
@@ -89,6 +92,23 @@ export default class CodexBarDumper extends Extension {
     const lines = [];
     this._walk(button.menu.actor, 0, lines);
     lines.forEach((l) => print(`CODEXBAR-DUMP ${l}`));
+
+    // Submenus are not in the actor tree until opened, so open each one and dump
+    // what it holds.
+    const subs = [];
+    const collectSubs = (actor) => {
+      if (actor instanceof PopupMenu.PopupSubMenuMenuItem) subs.push(actor);
+      actor.get_children().forEach(collectSubs);
+    };
+    collectSubs(button.menu.actor);
+    for (const sub of subs) {
+      sub.menu.open();
+      const subLines = [];
+      this._walk(sub.menu.actor, 0, subLines);
+      print(`CODEXBAR-DUMP --- submenu ${sub.label.text} ---`);
+      subLines.forEach((l) => print(`CODEXBAR-DUMP ${l}`));
+      sub.menu.close();
+    }
 
     // The panel indicator lives outside the menu, so dump it separately.
     lines.length = 0;

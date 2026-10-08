@@ -130,3 +130,9 @@
 .codexbar-action-icon {
     icon-size: 16px;
 }
+
+/* Credits line inside the About submenu: readable prose, not an action. */
+.codexbar-about-note {
+    font-size: 0.8em;
+    padding: 4px 6px 8px;
+}

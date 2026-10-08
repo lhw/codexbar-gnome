@@ -6,7 +6,10 @@ const ROOT = GLib.get_current_dir();
 const links = await import(
   GLib.filename_to_uri(GLib.build_filenamev([ROOT, "links.js"]), null)
 );
-const { USAGE_URLS, STATUS_URLS, usageUrl, statusUrl, ADD_ACCOUNT_URL, ABOUT_URL, INSTALL_URL } = links;
+const {
+  USAGE_URLS, STATUS_URLS, usageUrl, statusUrl, ADD_ACCOUNT_URL, INSTALL_URL,
+  EXTENSION_REPO_URL, CLI_REPO_URL, FORK_ORIGIN_URL, FORK_ORIGIN_EXTENSION_URL, LICENSE_URL,
+} = links;
 
 let failed = 0;
 let passed = 0;
@@ -33,7 +36,7 @@ for (const [id, url] of Object.entries(USAGE_URLS)) {
 for (const [id, url] of Object.entries(STATUS_URLS)) {
   if (!isHttp(url)) bad.push(`status:${id}`);
 }
-for (const [name, url] of [["add", ADD_ACCOUNT_URL], ["about", ABOUT_URL], ["install", INSTALL_URL]]) {
+for (const [name, url] of [["add", ADD_ACCOUNT_URL], ["install", INSTALL_URL]]) {
   if (!isHttp(url)) bad.push(name);
 }
 check("no malformed URLs", bad, []);
@@ -68,6 +71,32 @@ console.log("the providers on this machine are mapped");
 check("opencodego usage", usageUrl("opencodego"), "https://opencode.ai/console/go/status");
 check("deepseek usage", usageUrl("deepseek"), "https://platform.deepseek.com/usage");
 check("claude usage", usageUrl("claude"), "https://claude.ai/settings/usage");
+
+console.log("the About submenu links are all real https URLs");
+const about = {
+  "this extension": EXTENSION_REPO_URL,
+  "cli repo": CLI_REPO_URL,
+  "fork origin": FORK_ORIGIN_URL,
+  "fork on EGO": FORK_ORIGIN_EXTENSION_URL,
+  license: LICENSE_URL,
+};
+const badAbout = Object.entries(about).filter(([, u]) => !isHttp(u)).map(([k]) => k);
+check("all About URLs well formed", badAbout, []);
+
+console.log("the About links point at three distinct projects");
+check(
+  "this extension is its own repo",
+  EXTENSION_REPO_URL.includes("lhw/codexbar-gnome"),
+  true,
+);
+check("cli repo is steipete", CLI_REPO_URL.includes("steipete/CodexBar"), true);
+check("fork origin is InledGroup", FORK_ORIGIN_URL.includes("InledGroup/codexbar-gnome"), true);
+check("license points at this fork", LICENSE_URL.includes("lhw/codexbar-gnome"), true);
+check(
+  "three distinct owners",
+  [...new Set([EXTENSION_REPO_URL, CLI_REPO_URL, FORK_ORIGIN_URL])].length,
+  3,
+);
 
 console.log("");
 console.log(`${passed} passed, ${failed} failed`);

@@ -119,6 +119,11 @@ Usage Dashboard and Status Page follow whichever provider tab is active, using
 the map in `links.js`. Add Account opens codexbar's configuration docs, where
 credentials are set.
 
+About CodexBar opens a submenu rather than a browser tab, listing this
+repository, the CLI, the extension it was forked from, that extension's
+extensions.gnome.org listing, the license, and a line of credits. All of them
+live in `links.js`.
+
 ## Differences from the macOS app
 
 - GNOME's theme draws the popup background, so there is no frosted-glass

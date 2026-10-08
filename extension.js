@@ -18,7 +18,17 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { fetchCost, fetchUsage, findCodexBar } from "./cli.js";
 import { parseUsagePayload } from "./parse.js";
 import { formatMoney, formatTokens, parseCostPayload } from "./cost.js";
-import { ABOUT_URL, ADD_ACCOUNT_URL, INSTALL_URL, statusUrl, usageUrl } from "./links.js";
+import {
+  ADD_ACCOUNT_URL,
+  CLI_REPO_URL,
+  EXTENSION_REPO_URL,
+  FORK_ORIGIN_EXTENSION_URL,
+  FORK_ORIGIN_URL,
+  INSTALL_URL,
+  LICENSE_URL,
+  statusUrl,
+  usageUrl,
+} from "./links.js";
 
 // Secondary text keeps the theme's foreground colour and is dimmed with actor
 // opacity. St has no CSS `opacity`, and a single extension stylesheet cannot
@@ -493,7 +503,43 @@ export default class CodexBarExtension extends Extension {
     // No Quit item: this is an extension, not an application, so there is no
     // process to exit. Disabling is the shell's job, via the Extensions app or
     // `gnome-extensions disable`.
-    add(_("About CodexBar"), "help-about-symbolic", open(ABOUT_URL));
+    this._buildAboutMenu();
+  }
+
+  /**
+   * "About CodexBar" opens a submenu rather than a page, so the credits and the
+   * project links live in the shell instead of bouncing out to a browser.
+   */
+  _buildAboutMenu() {
+    const open = (uri) => () => {
+      Gio.AppInfo.launch_default_for_uri(uri, null);
+      this._indicator.menu.close();
+    };
+
+    const submenu = new PopupMenu.PopupSubMenuMenuItem(_("About CodexBar"), true);
+    // PopupSubMenuMenuItem builds its own ornament; leave it alone.
+
+    const item = (label, uri) => {
+      const entry = new PopupMenu.PopupMenuItem(label, {
+        style_class: "codexbar-action",
+      });
+      entry.connect("activate", open(uri));
+      submenu.menu.addMenuItem(entry);
+    };
+
+    item(_("This extension"), EXTENSION_REPO_URL);
+    item(_("codexbar CLI"), CLI_REPO_URL);
+    item(_("Upstream extension"), FORK_ORIGIN_URL);
+    item(_("Upstream on extensions.gnome.org"), FORK_ORIGIN_EXTENSION_URL);
+    item(_("License"), LICENSE_URL);
+
+    const note = new PopupMenu.PopupMenuItem(
+      _("A fork of the extension by @inled.es, published as 9841 and linked from the CodexBar README. Rewritten around a single CLI call."),
+      { style_class: "codexbar-about-note", reactive: false },
+    );
+    submenu.menu.addMenuItem(note);
+
+    this._footerBox.addMenuItem(submenu);
   }
 
   _updateUI() {
