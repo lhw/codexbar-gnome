@@ -1,23 +1,32 @@
 #!/bin/bash
-# Script to package the extension
+# Package the extension.
 
-UUID="codexbar@inled.es"
+set -e
+cd "$(dirname "$0")"
+
+UUID="$(python3 -c "import json;print(json.load(open('metadata.json'))['uuid'])")"
 
 echo "Compiling schemas..."
 glib-compile-schemas schemas/
 
-echo "Packaging Codexbar"
+echo "Running tests..."
+for t in test-parse test-cost test-display; do
+  result="$(gjs -m "test/$t.js" 2>&1 | sed 's/^Gjs-Console-Message: [0-9:.]* //' | tail -1)"
+  echo "  $t: $result"
+  case "$result" in
+    *"0 failed") ;;
+    *) echo "FAILED: $t"; exit 1 ;;
+  esac
+done
+
+echo "Packing $UUID..."
 gnome-extensions pack \
     --extra-source=extension.js \
     --extra-source=prefs.js \
-    --extra-source=usageApi.js \
-    --extra-source=providerSources.js \
-    --extra-source=secret.js \
+    --extra-source=cli.js \
+    --extra-source=parse.js \
+    --extra-source=cost.js \
     --extra-source=stylesheet.css \
-    --extra-source=core/ \
-    --extra-source=adapters/ \
-    --extra-source=media/ \
-    --schema=schemas/org.gnome.shell.extensions.codexbar.gschema.xml \
     --force
 
-echo "Extension packed on ${UUID}.shell-extension.zip"
+echo "Packed ${UUID}.shell-extension.zip"

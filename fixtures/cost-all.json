@@ -1,0 +1,141 @@
+[
+  {
+    "coverage" : {
+      "estimated" : 0,
+      "priced" : 0,
+      "unmetered" : 0,
+      "unpriced" : 0
+    },
+    "currencyCode" : "USD",
+    "daily" : [
+
+    ],
+    "historyCoverageIsEstablished" : true,
+    "historyDays" : 30,
+    "historyLabel" : "Last 30 days",
+    "last30DaysCostUSD" : 0,
+    "last30DaysTokens" : 0,
+    "projects" : [
+
+    ],
+    "provenance" : "unknown",
+    "provider" : "codex",
+    "reportingPeriod" : "rolling:30",
+    "sessionCostUSD" : 0,
+    "sessionTokens" : 0,
+    "source" : "local",
+    "totals" : {
+      "totalCost" : 0,
+      "totalTokens" : 0
+    },
+    "updatedAt" : "2026-10-08T06:46:54Z"
+  },
+  {
+    "coverage" : {
+      "estimated" : 0,
+      "priced" : 0,
+      "unmetered" : 0,
+      "unpriced" : 0
+    },
+    "currencyCode" : "USD",
+    "daily" : [
+
+    ],
+    "historyCoverageIsEstablished" : true,
+    "historyDays" : 30,
+    "historyLabel" : "Last 30 days",
+    "last30DaysCostUSD" : 0,
+    "last30DaysTokens" : 0,
+    "projects" : [
+
+    ],
+    "provenance" : "unknown",
+    "provider" : "claude",
+    "reportingPeriod" : "rolling:30",
+    "sessionCostUSD" : 0,
+    "sessionTokens" : 0,
+    "source" : "local",
+    "totals" : {
+      "totalCost" : 0,
+      "totalTokens" : 0
+    },
+    "updatedAt" : "2026-10-08T06:46:54Z"
+  },
+  {
+    "coverage" : {
+      "estimated" : 0,
+      "priced" : 0,
+      "unmetered" : 0,
+      "unpriced" : 0
+    },
+    "currencyCode" : "USD",
+    "daily" : [
+
+    ],
+    "historyCoverageIsEstablished" : false,
+    "historyDays" : 30,
+    "historyLabel" : "Last 30 days",
+    "projects" : [
+
+    ],
+    "provenance" : "unknown",
+    "provider" : "antigravity",
+    "reportingPeriod" : "rolling:30",
+    "source" : "local",
+    "updatedAt" : "2026-10-08T06:46:54Z"
+  },
+  {
+    "coverage" : {
+      "estimated" : 0,
+      "priced" : 0,
+      "unmetered" : 0,
+      "unpriced" : 0
+    },
+    "currencyCode" : "USD",
+    "daily" : [
+
+    ],
+    "historyCoverageIsEstablished" : false,
+    "historyDays" : 30,
+    "historyLabel" : "Last 30 days",
+    "projects" : [
+
+    ],
+    "provenance" : "unknown",
+    "provider" : "muse",
+    "reportingPeriod" : "rolling:30",
+    "source" : "local",
+    "updatedAt" : "2026-10-08T06:46:54Z"
+  },
+  {
+    "coverage" : {
+      "estimated" : 0,
+      "priced" : 0,
+      "unmetered" : 0,
+      "unpriced" : 0
+    },
+    "currencyCode" : "USD",
+    "daily" : [
+
+    ],
+    "historyCoverageIsEstablished" : true,
+    "historyDays" : 30,
+    "historyLabel" : "Last 30 days",
+    "last30DaysCostUSD" : 0,
+    "last30DaysTokens" : 0,
+    "projects" : [
+
+    ],
+    "provenance" : "unknown",
+    "provider" : "pi",
+    "reportingPeriod" : "rolling:30",
+    "sessionCostUSD" : 0,
+    "sessionTokens" : 0,
+    "source" : "local",
+    "totals" : {
+      "totalCost" : 0,
+      "totalTokens" : 0
+    },
+    "updatedAt" : "2026-10-08T06:46:54Z"
+  }
+]

@@ -1,0 +1,7 @@
+{
+  "uuid": "codexbar-dumper@test",
+  "version": 1,
+  "name": "CodexBar Dumper",
+  "description": "Test-only: prints the CodexBar menu tree to the shell log",
+  "shell-version": ["50"]
+}

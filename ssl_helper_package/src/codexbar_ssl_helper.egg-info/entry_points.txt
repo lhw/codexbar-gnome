@@ -1,2 +1,0 @@
-[console_scripts]
-codexbar-ssl-helper = codexbar_ssl_helper.helper:main

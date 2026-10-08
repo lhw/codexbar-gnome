@@ -1,20 +1,24 @@
 #!/bin/bash
-# Script to install/reinstall the extension for quick tests
+# Install the current checkout into the user extension directory and enable it.
+set -eu
+cd "$(dirname "$0")"
 
-UUID="codexbar@inled.es"
-ZIP_FILE="${UUID}.shell-extension.zip"
+UUID="$(python3 -c "import json;print(json.load(open('metadata.json'))['uuid'])")"
+EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 
-# 1. Make sure it is packed
 ./build.sh
 
-echo "Deleting previous version (if it exists)..."
-gnome-extensions uninstall "$UUID" 2>/dev/null
-rm -rf ~/.local/share/gnome-shell/extensions/"$UUID"
+echo "Installing $UUID..."
+rm -rf "$EXT_DIR"
+mkdir -p "$EXT_DIR"
+tar --exclude=.git --exclude='*.zip' --exclude=test -cf - . | tar -C "$EXT_DIR" -xf -
 
-echo "Installing new version"
-gnome-extensions install "$ZIP_FILE" --force
+# GNOME Shell rescans the extension directory on change, but a shell that was
+# already running when this uuid first appeared may not notice. Enabling over
+# D-Bus reports whether it picked it up.
+gnome-extensions enable "$UUID" 2>&1 || true
 
-echo "Enabling the extensions..."
-gnome-extensions enable "$UUID"
-
-echo "Installation finished. Read the README to know how to run the extension whether you are on wayland or x11."
+echo
+echo "Installed to $EXT_DIR"
+echo "On Wayland, log out and back in if the panel icon does not appear."
+echo "Test without touching your session: ./ui-test.sh"

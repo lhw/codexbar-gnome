@@ -1,148 +1,82 @@
 # CodexBar for GNOME
 
-A GNOME Shell extension to monitor AI provider usage metrics directly from the system panel. This extension acts as a graphical interface for the CodexBar CLI, providing real-time visibility into your API quotas and usage tiers.
+A GNOME Shell panel extension that shows AI provider usage limits, matching the
+layout of the macOS CodexBar menu. It reads from the
+[`codexbar`](https://github.com/steipete/CodexBar) command line tool, so nothing
+is scraped and no browser cookies are handled here.
 
-![CodexBar Panel](<demo.gif>)
+Targets GNOME Shell 50. Uses the default theme; `stylesheet.css` only sets
+spacing and fill colours.
 
-## Features
+## Install
 
-- Real-time monitoring of AI provider usage (Gemini, OpenAI, etc).
-- Support for standard Codex and Codex Spark 5-hour/weekly usage tiers
-- Toggle between Remaining Quota and Used Quota display modes.
-- Automatic background refreshes with configurable intervals.
-- Visual warnings (color changes) when reaching quota limits.
-- Automatic resolution of CodexBar CLI paths (Homebrew supported).
-- Calculate and display weekly usage pace from the existing quota window
-- Render Code review usage when the Linux API supplies it
-- Add regression coverage for the new normalization and pace calculation
-- Added support to show AI economic expenditure
-
-## Updates  
-- Support Codex Spark usage tiers from the direct ChatGPT endpoint (`additional_rate_limits`)
-- Render provider-supplied detail sections (OpenRouter credits, API key budget, spend history) with a new `show-provider-details` toggle
-- Derive a meaningful usage percent for balance-based providers (e.g. OpenRouter) from the Credits / API key sections
-- Welcome screen now installs the cookie importer and SSL helper scripts directly from the repo (raw GitHub) instead of PyPI
-
-## Requirements
-
-The extension requires the CodexBar CLI tool installed on your system.
-
-### Install CodexBar CLI
-
-It is recommended to install the CLI via Homebrew, which is the official way:
-
-```bash
-brew install steipete/tap/codexbar
-```
-Homebrew exists for Linux (and is a good package manager). For those who don't know, it can be installed with
-```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```sh
+git clone https://github.com/lhw/codexbar-gnome
+cd codexbar-gnome
+./install.sh
 ```
 
-### Install Cookie Importer (only for Codex users)
-It is now distributed separately from the extension and no longer requires PyPI. Download it directly from the repo into `~/.local/bin` (the extension looks there by default):
-```bash
-mkdir -p ~/.local/bin && curl -fsSL https://raw.githubusercontent.com/InledGroup/codexbar-gnome/main/scripts/codexbar-cookie-importer -o ~/.local/bin/codexbar-cookie-importer && chmod +x ~/.local/bin/codexbar-cookie-importer
-```
-It is a dependency-free bash script (uses `secret-tool`, `openssl`, `sqlite3`).
+You need the `codexbar` CLI on `PATH` (`brew install steipete/tap/codexbar`, or
+a Linux build). On Wayland, log out and back in after installing so the shell
+picks up the new extension.
 
-### Install helper to Trust the Certificate of the Antigravity Language Server (only for Antigravity users)
-This minimal script is invoked by the extension when you click on the trust antigravity cert button and what it does is save the certificate in the system trust store, elevating privileges.   
-Since it elevates privileges, it would be unreasonable to integrate the elevation logic into the extension (as JustPerfection told me) so it is served as a standalone script that the user must decide to install, thus complying with GJS guidelines. It is now a dependency-free bash script (no PyPI):
+## What it shows
 
-```bash
-mkdir -p ~/.local/bin && curl -fsSL https://raw.githubusercontent.com/InledGroup/codexbar-gnome/main/scripts/codexbar-ssl-helper -o ~/.local/bin/codexbar-ssl-helper && chmod +x ~/.local/bin/codexbar-ssl-helper && codexbar-ssl-helper
-```
+The popup mirrors the macOS app:
 
+- A tab per provider, each with a load underline so you can see which one needs
+  attention without switching to it
+- The active provider's name, account, and a relative "Updated" stamp
+- One section per rate window: the label the CLI reports (Session, Weekly,
+  Monthly), a usage bar, the percentage, and a reset countdown
+- A pace line per window, using the CLI's own pace data
+- Balance providers, such as DeepSeek, render as a value line rather than a
+  misleading empty bar
+- A cost summary (today and the last 30 days) for providers `codexbar cost`
+  supports: Antigravity, Claude, Codex, Muse Code, and Pi
+- Footer actions: Add Account, Usage Dashboard, Status Page, Refresh Now,
+  Settings, Quit
 
-## Installation
+## Layout
 
-### From EGO
-Reviewed by the great GNOME experts, with the confidence of correct operation and stability.
-[https://extensions.gnome.org/extension/9841/codexbar/](https://extensions.gnome.org/extension/9841/codexbar/)
+| File | Role |
+| --- | --- |
+| `extension.js` | Panel button, widget tree, refresh and disable lifecycle |
+| `cli.js` | Runs the `codexbar` binary over `Gio.Subprocess`, with timeouts |
+| `parse.js` | Pure parsing of `codexbar usage --format json` |
+| `cost.js` | Pure parsing of `codexbar cost --format json`, plus formatting |
+| `prefs.js` | Preferences window: refresh interval, pace toggle |
+| `stylesheet.css` | Spacing and fill colours only |
 
-### From Github  
-1. Clone or fork the repo
-2. Run the `./install` script
-3. - On Wayland:
-      - Log out and log in
-      - **For fast development and iteration**: Run `dbus-run-session gnome-shell --wayland --devkit`. You need to have installed Mutter Devkit
-   - On X11: `Alt+F2` and type `r` and press enter.
+Providers are discovered automatically. `codexbar usage --format json` returns
+every enabled provider in one call, so there is no provider list to configure.
 
-### From Unofficial Gnome Shell Store
-I am working on a very interesting concept to present, which is the automated review of extensions with AI. 
-The package is not updated very regularly, the site is still a concept, but it can be tested [https://extensions-gnome.github.io/?ext=codexbar%40inled.es](https://extensions-gnome.github.io/?ext=codexbar%40inled.es)
+## Tests
 
-## Configuration
-
-Access the settings through the gear icon in the extension menu or using your extension manager client.
-
-### Provider Commands
-
-Each provider must be configured with a command that returns JSON output.
-
-Example for Gemini:
-```bash
-codexbar --provider gemini --source api --format json
+```sh
+./build.sh      # compiles schemas, runs tests, packs the zip
+./ui-test.sh    # loads the extension in a headless shell and dumps the menu
 ```
 
-The extension will automatically attempt to locate the `codexbar` binary in common locations such as `/home/linuxbrew/.linuxbrew/bin/` if an absolute path is not provided. 
+`build.sh` runs three headless suites (`test/test-parse.js`,
+`test/test-cost.js`, `test/test-display.js`) against JSON fixtures captured from
+the real CLI in `fixtures/`. `ui-test.sh` starts an isolated headless GNOME
+Shell, enables the extension, and prints the rendered menu's label tree, which
+catches layout errors the unit tests cannot. It never touches your live session.
 
-Certain vendors have specific fields in Codexbar CLI, whose interpretation may not have been implemented so this is a great opportunity for you to implement support (if you want) and do a PR.
+## Differences from the macOS app
 
-### API Keys (e.g. OpenRouter)
+- GNOME's theme draws the popup background, so there is no frosted-glass
+  translucency.
+- Provider icons are not included; the upstream extension ships them, but they
+  are not needed for the usage data and were dropped here.
+- Add Account, Usage Dashboard, and Status Page open web pages. The macOS app
+  links into its own UI.
+- No Sonnet or Extra usage rows. Those come from Claude-specific fields that the
+  current CLI JSON does not expose; they will appear if a provider reports them.
 
-Some providers (OpenRouter with `--source api`) authenticate the CodexBar CLI via an environment variable, e.g. `OPENROUTER_API_KEY`, instead of a token cached on disk. Setting that variable in `~/.zshrc`, `~/.bashrc`, or similar is **not enough**: GNOME Shell is started by your login/display manager, not by an interactive shell, so it never sources your shell's dotfiles, and any command the extension runs (as a child process of GNOME Shell) inherits GNOME Shell's environment, not your terminal's.
+## Credits
 
-To make the variable visible to the extension, add it to your systemd user environment instead:
-
-```bash
-mkdir -p ~/.config/environment.d
-echo 'OPENROUTER_API_KEY=sk-or-v1-...' > ~/.config/environment.d/codexbar.conf
-chmod 600 ~/.config/environment.d/codexbar.conf
-```
-
-Then log out and log back in. `environment.d` files are only read once, when your `systemd --user` manager starts — if it's still running from before you added the file (e.g. lingering is enabled: `loginctl show-user $USER | grep Linger`), a normal logout/login won't pick it up. In that case, apply it to the running instance once, then log out/in as usual:
-
-```bash
-systemctl --user import-environment OPENROUTER_API_KEY
-```
-
-You can confirm GNOME Shell actually has the variable with:
-
-```bash
-tr '\0' '\n' < /proc/$(pgrep -x gnome-shell)/environ | grep OPENROUTER_API_KEY
-```
-
-Without it, `codexbar --provider openrouter --source api` still returns valid JSON, but with a top-level `error` field and no `usage.details` — so the OpenRouter tab shows only a bare, empty tier instead of the Credits / API key / Spend history breakdown.
-
-### Display Mode
-
-You can choose how metrics are displayed:
-- **Remaining**: Shows the percentage of quota left (default).
-- **Used**: Shows the percentage of quota consumed.
-
-
-## Join the Community
-
-Follow us on social media for updates, discussions, and support:
-
-- **Discord**: [Join our Discord server](https://discord.com/invite/PSeTkDMnr)
-- **Matrix**: [Join the Matrix server](https://matrix.inled.es)
-- **Mastodon**: [@inled on mastodon.social](https://mastodon.social/@inled)
-- **YouTube**: [Inled Group YouTube Channel](https://www.youtube.com/@inledgroup)
-- **X (Twitter)**: [@inledgroup on X](https://x.com/inledgroup)
-
-## License
-
-This project is licensed under the terms of the MIT license. Contributions are welcome! 
-
-> [!WARNING]
-> If you base your code on ours or remix it using AI, you must credit the original repository out of respect for the contributors and the creator.
-
-## About:  
-I've been working on a lot of projects lately and wasn't sure if people really cared about them until this one completely brought back my excitement for development and showed me how useful it can be for users. The GNOME community is fantastic.
-
-> [!NOTE]
-> **AI DISCLAIMER**
-> AI has been used on this project. ALL THE CODE that AI made has been reviewed and edited by humans (you can see the difference between ai comments and human-made comments XD)
+Fork of [InledGroup/codexbar-gnome](https://github.com/InledGroup/codexbar-gnome),
+which is published as [extension 9841](https://extensions.gnome.org/extension/9841/codexbar/)
+and linked from the CodexBar README. See `LICENSE.md` for its terms.

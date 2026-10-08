@@ -1,50 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <schemalist>
-  <enum id="org.gnome.shell.extensions.codexbar.DisplayMode">
-    <value nick="used" value="0"/>
-    <value nick="remaining" value="1"/>
-  </enum>
-
   <schema id="org.gnome.shell.extensions.codexbar" path="/org/gnome/shell/extensions/codexbar/">
     <key name="refresh-interval" type="i">
+      <range min="1" max="240"/>
       <default>15</default>
       <summary>Refresh interval in minutes</summary>
+      <description>How often to poll the codexbar CLI. Countdowns between fetches still tick every minute.</description>
     </key>
-    <key name="providers" type="s">
-      <default>'[{"name": "Gemini", "command": "/home/linuxbrew/.linuxbrew/bin/codexbar --provider gemini --source api --format json"}]'</default>
-      <summary>JSON string of configured AI providers</summary>
-    </key>
-    <key name="display-mode" enum="org.gnome.shell.extensions.codexbar.DisplayMode">
-      <default>'remaining'</default>
-      <summary>Whether to show used or remaining quota</summary>
-    </key>
-    <key name="first-run" type="b">
+    <key name="show-pace" type="b">
       <default>true</default>
-      <summary>Whether this is the first time the extension is run</summary>
-    </key>
-    <key name="show-logos" type="b">
-      <default>true</default>
-      <summary>Whether to show provider logos in the tabs</summary>
-    </key>
-    <key name="show-pacing-info" type="b">
-      <default>true</default>
-      <summary>Whether to show weekly usage pacing details</summary>
-    </key>
-    <key name="show-provider-details" type="b">
-      <default>true</default>
-      <summary>Whether to show provider-supplied detail sections</summary>
-    </key>
-    <key name="dev-custom-output-enabled" type="b">
-      <default>false</default>
-      <summary>Enable developer custom output simulation</summary>
-    </key>
-    <key name="dev-custom-output-provider-name" type="s">
-      <default>'Mock Provider'</default>
-      <summary>Developer mock provider name</summary>
-    </key>
-    <key name="dev-custom-output-json" type="s">
-      <default>'[]'</default>
-      <summary>Developer mock JSON output</summary>
+      <summary>Show pace lines under usage meters</summary>
+      <description>Whether to show whether a window is running ahead of or behind its expected pace.</description>
     </key>
   </schema>
 </schemalist>

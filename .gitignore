@@ -1,25 +1,7 @@
-# GNOME Shell Extension temporary files
+# GNOME Shell Extension build output
 schemas/gschemas.compiled
 *.shell-extension.zip
-
-# Temporary test files
-test_output.txt
-test_error.txt
-test_exec.js
-test_exec_simple.js
-test_output.txt
-
-# Node/Environment
-node_modules/
-.env
 
 # OS files
 .DS_Store
 Thumbs.db
-erropenai.txt
-
-venv/
-__pycache__/
-cookie_importer_package/dist/
-internal-codexbar-antigravity-fix/
-*.so

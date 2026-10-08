@@ -1,0 +1,54 @@
+[
+  {
+    "pace" : {
+      "primary" : {
+        "deltaPercent" : 20,
+        "etaSeconds" : 3414,
+        "expectedUsedPercent" : 54,
+        "stage" : "farAhead",
+        "summary" : "20% in deficit | Expected 54% used | Projected empty in 57m",
+        "willLastToReset" : false
+      },
+      "secondary" : {
+        "deltaPercent" : 2,
+        "etaSeconds" : 320581,
+        "expectedUsedPercent" : 42,
+        "stage" : "slightlyAhead",
+        "summary" : "2% in deficit | Expected 42% used | Runs out in 3d 17h",
+        "willLastToReset" : false
+      },
+      "tertiary" : {
+        "deltaPercent" : -8,
+        "expectedUsedPercent" : 65,
+        "stage" : "behind",
+        "summary" : "8% in reserve | Expected 65% used | Lasts until reset",
+        "willLastToReset" : true
+      }
+    },
+    "provider" : "opencodego",
+    "rateWindowLabels" : {
+      "primary" : "5-hour",
+      "secondary" : "Weekly",
+      "tertiary" : "Monthly"
+    },
+    "source" : "local+api",
+    "usage" : {
+      "primary" : {
+        "resetsAt" : "2026-10-08T00:16:07Z",
+        "usedPercent" : 74,
+        "windowMinutes" : 300
+      },
+      "secondary" : {
+        "resetsAt" : "2026-10-11T23:59:59Z",
+        "usedPercent" : 44,
+        "windowMinutes" : 10080
+      },
+      "tertiary" : {
+        "resetsAt" : "2026-10-18T12:48:53Z",
+        "usedPercent" : 57,
+        "windowMinutes" : 43200
+      },
+      "updatedAt" : "2026-10-07T21:58:03Z"
+    }
+  }
+]
