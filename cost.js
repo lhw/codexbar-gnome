@@ -26,6 +26,7 @@ export function formatTokens(value) {
   if (!Number.isFinite(n) || n === 0) return "0";
   if (n < 1000) return String(Math.round(n));
   if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}K`;
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
   return `${(n / 1_000_000).toFixed(1)}M`;
 }
 

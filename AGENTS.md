@@ -23,9 +23,12 @@ upstream that merging is not practical; treat it as independent.
 | `parse.js` | Pure parsing of `codexbar usage --format json` |
 | `cost.js` | Pure parsing of `codexbar cost --format json`, plus formatting |
 | `links.js` | Per-provider dashboard and status URLs, plus the About links |
-| `prefs.js` | Preferences window: refresh interval, pace toggle, primary provider |
+| `prefs.js` | Native preferences, explicit profile discovery, shared helper settings, and user-service controls |
 | `stylesheet.css` | Spacing and fill colours only, never backgrounds or fonts |
 | `test/` | Headless suites plus a throwaway dumper extension |
+| `browser-session/daemon.py` | Optional helper: browser readers, provider adapters/registry, sanitized caches, polling |
+| `browser-session/runtime.py` | Shared GSettings configuration and user-service unit generation |
+| `browser-session/helper.py` | Explicit helper setup, foreground runs, and opt-in user-service management |
 | `docs/screenshots/` | README images, deliberately outside `media/` so they stay out of the packaged zip |
 
 The split is deliberate: `parse.js`, `cost.js` and `links.js` import no `gi://`
@@ -36,7 +39,7 @@ that way. `extension.js` cannot be imported outside a shell, so
 ## Build and test
 
 ```sh
-./build.sh      # compiles schemas, runs all six suites, packs the zip
+./build.sh      # compiles schemas, runs six GJS suites plus browser-session tests, packs the zip
 ./ui-test.sh    # headless shell, dumps the rendered menu
 ./install.sh    # build, then install into the user extension dir
 ```
@@ -51,8 +54,9 @@ builds the zip and attaches it to the published release, so that path still
 installs `gnome-shell`.
 
 `build.sh` runs `test-parse`, `test-cost`, `test-display`, `test-links`,
-`test-prefs` and `test-cli` against fixtures in `fixtures/`. `test-cli.js` shells
-out to the real binary; the rest are pure.
+`test-prefs` and `test-cli` against fixtures in `fixtures/`, plus the
+`browser-session` Python tests through `uv`. `test-cli.js` shells out to the real
+binary; the rest are pure or use temporary browser database fixtures.
 
 `ui-test.sh` loads the extension into a headless GNOME Shell, has a throwaway
 companion extension dump the rendered menu, and asserts the shell reports no
@@ -86,6 +90,10 @@ These cost real debugging time. All of them bit during development.
 - **`read_bytes_async`'s count is a per-read size, not a total.** One call
   truncates at the limit. `codexbar config providers` emits about 8KB, which
   lands mid-key and yields unparseable JSON. Drain until EOF.
+- **GJS `TextDecoder` does not implement `{stream: true}`.** Collect bounded
+  byte chunks and decode once at EOF, preserving UTF-8 characters across reads.
+  Test normal output as well as failure paths; output-cap tests alone can pass
+  while a decoder error is silently discarding every successful response.
 - **A percentage width on a `St.Widget` with no layout manager resolves to
   nothing.** Every bar fill sizes itself in pixels from a fixed track width
   instead. See `fillWidth` in `extension.js`.
@@ -114,7 +122,7 @@ Verify a packaging change rather than trusting it:
 ```sh
 ./build.sh
 rm -rf /tmp/ziptest && mkdir /tmp/ziptest
-cd /tmp/ziptest && unzip -q ~/src/codexbar-gnome/codexbar-gnome/*.zip && ls -R
+cd /tmp/ziptest && unzip -q ~/src/codexbar-gnome/*.zip && ls -R
 ```
 
 ## Environment hazards
@@ -165,6 +173,45 @@ Adding an entry is worth it only when a provider looks wrong, since none of them
 affect correctness.
 
 ## Changing the data model
+
+### Adding browser enrichment
+
+The optional Python helper is separate from the credential-free Shell process.
+Its `PROVIDERS` registry controls discovery, session reading, refresh dispatch,
+profile listing, and CLI choices. Add a `Provider` registration with three hooks:
+
+- `discover_profiles()` returns `(label, Path)` pairs without reading credentials.
+- `read_session(profile)` reads only that provider's scoped credentials.
+- `fetch(session, options)` returns validated, sanitized usage with `provider` and
+  `updatedAt`; no tokens, cookies, account details, or raw responses in the cache.
+
+Cookie adapters declare exact domains, allowed names/token bases, and request
+paths; reuse `firefox_cookies()` to retain expiry, path, prefix, and container
+checks. Use the optional `normalize_cookies` hook for provider-specific cookie
+assembly. Other credential stores use a provider-specific reader. Never treat an
+unknown provider as Codex. A provider-specific fetcher can live in a new Python
+module imported by the daemon; non-test helper `.py` files ship automatically.
+Keep normalization tests and add a discovery/refresh registration test.
+
+`session_profiles()` filters discovery candidates using the scoped session reader.
+Listing usable sessions therefore requires explicit `--enable --list-profiles`
+consent (provided by `helper.py profiles`), makes no network requests, and never
+publishes credentials or caches. A locally stored session is not server-validated.
+`helper.py profiles --json` returns `{profiles: [{label, providers}]}` for the
+Preferences dropdown. Never store scan results as credentials or auto-scan when
+Preferences opens. Opening Preferences may only check the service's read-only
+systemd state; setup/start and local session scanning require explicit actions.
+
+Browser profile, interval, expected Codex email, solver URL, and consent come
+from the extension's GSettings, not a second config file or service arguments.
+Do not start a new provider after consent/config changes; an in-flight request
+may finish. New cache shapes still need corresponding Shell validation/rendering
+and display tests; the registry does not invent UI for an unknown payload.
+
+`build.sh` packages a clean `browser-session/` directory, excluding tests and
+virtual environments. `install.sh` installs that zip rather than copying the
+working tree. Test helper setup in an extracted temporary zip; never run
+`enable-service` against the real user merely to verify packaging.
 
 The CLI's JSON schema is the one external contract this depends on, and it can
 change without warning. `parse.js` and `cost.js` normalise it; `test-parse.js`

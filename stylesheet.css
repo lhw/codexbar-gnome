@@ -90,6 +90,36 @@
     font-size: 0.85em;
 }
 
+/* Native-theme day controls inside usage-history submenus. */
+.codexbar-history-inset {
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+.codexbar-history-chart {
+    spacing: 2px;
+    padding: 8px 16px;
+}
+
+.codexbar-history-detail {
+    padding: 4px 16px;
+}
+
+.codexbar-history-day {
+    min-height: 52px;
+    padding: 1px;
+}
+
+.codexbar-history-day:focus {
+    background-color: rgba(127, 127, 127, 0.3);
+}
+
+.codexbar-history-bar {
+    min-width: 4px;
+    border-radius: 2px;
+    background-color: #3584e4;
+}
+
 /* Usage meter. */
 .codexbar-bar-track {
     height: 6px;

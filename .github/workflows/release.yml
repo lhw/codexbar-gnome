@@ -46,6 +46,12 @@ jobs:
 
       - name: Install build dependencies
         if: steps.gate.outputs.build == 'true'
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install GNOME build dependencies
+        if: steps.gate.outputs.build == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \

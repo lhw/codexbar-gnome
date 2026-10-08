@@ -1,0 +1,38 @@
+[
+  {
+    "credits": {
+      "remaining": 0
+    },
+    "pace": {
+      "secondary": {
+        "deltaPercent": 0,
+        "etaSeconds": 570940,
+        "expectedUsedPercent": 5,
+        "stage": "onTrack",
+        "summary": "On pace | Expected 5% used | Runs out in 6d 14h",
+        "willLastToReset": false
+      }
+    },
+    "provider": "codex",
+    "rateWindowLabels": {
+      "secondary": "Weekly"
+    },
+    "resetCredits": {
+      "available": 0
+    },
+    "source": "oauth",
+    "usage": {
+      "identity": {
+        "loginMethod": "plus",
+        "providerID": "codex"
+      },
+      "secondary": {
+        "resetsAt": "2026-10-15T07:43:18Z",
+        "resetDescription": "Oct 15 at 9:43 AM",
+        "usedPercent": 5,
+        "windowMinutes": 10080
+      },
+      "updatedAt": "2026-10-08T16:04:04Z"
+    }
+  }
+]

@@ -9,9 +9,7 @@ EXT_DIR="$HOME/.local/share/gnome-shell/extensions/$UUID"
 ./build.sh
 
 echo "Installing $UUID..."
-rm -rf "$EXT_DIR"
-mkdir -p "$EXT_DIR"
-tar --exclude=.git --exclude='*.zip' --exclude=test -cf - . | tar -C "$EXT_DIR" -xf -
+gnome-extensions install --force "${UUID}.shell-extension.zip"
 
 # GNOME Shell rescans the extension directory on change, but a shell that was
 # already running when this uuid first appeared may not notice. Enabling over

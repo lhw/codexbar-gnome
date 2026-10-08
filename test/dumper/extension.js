@@ -161,6 +161,34 @@ export default class CodexBarDumper extends Extension {
         return;
       }
       tab.emit("clicked", null);
+      const historySubs = [];
+      const collectHistory = (actor) => {
+        if (actor instanceof PopupMenu.PopupSubMenuMenuItem) historySubs.push(actor);
+        actor.get_children().forEach(collectHistory);
+      };
+      collectHistory(button.menu.actor);
+      for (const sub of historySubs) {
+        sub.menu.open();
+        const dayButtons = [];
+        const detailLabels = [];
+        const collectChart = (actor) => {
+          if (actor instanceof St.Button && String(actor.style_class).includes("codexbar-history-day")) dayButtons.push(actor);
+          if (actor instanceof St.Label && String(actor.style_class).includes("codexbar-history-detail")) detailLabels.push(actor);
+          actor.get_children().forEach(collectChart);
+        };
+        collectChart(sub.menu.actor);
+        for (const day of [dayButtons[0], dayButtons.at(-1)].filter(Boolean)) {
+          day.emit("clicked", null);
+          if (!detailLabels.some((label) => label.text.startsWith(day.accessible_name))) {
+            throw new Error("History day selection did not update its details");
+          }
+        }
+        const historyLines = [];
+        this._walk(sub.menu.actor, 0, historyLines);
+        print(`CODEXBAR-DUMP --- history ${sub.label.text} ---`);
+        historyLines.forEach((line) => print(`CODEXBAR-DUMP ${line}`));
+        sub.menu.close();
+      }
       const tabLines = [];
       this._walk(button.menu.actor, 0, tabLines);
       print(`CODEXBAR-DUMP --- after clicking tab ${index} ---`);

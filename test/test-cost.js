@@ -33,6 +33,7 @@ check("not a number", formatMoney("x"), "-");
 console.log("token formatting");
 check("thousands", formatTokens(15000), "15K");
 check("millions", formatTokens(218000000), "218.0M");
+check("billions", formatTokens(1226402124), "1.2B");
 check("small", formatTokens(842), "842");
 check("zero", formatTokens(0), "0");
 

@@ -1,0 +1,11 @@
+[project]
+name = "codexbar-browser-session"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "cramjam==2.13.0",
+    "plyvel==1.5.1",
+]
+
+[tool.uv]
+package = false

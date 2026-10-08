@@ -160,6 +160,25 @@ function formatPace(pace, usedPercent) {
   return `${head} · ${tail}`;
 }
 
+function formatCodexPace(pace) {
+  return pace?.summary ? _("Pace: %s").format(pace.summary) : "";
+}
+
+function formatCodexDetails(provider) {
+  const lines = [];
+  if (Number.isFinite(provider.creditsRemaining) && provider.creditsRemaining > 0) {
+    lines.push(_("Credits: %d left").format(provider.creditsRemaining));
+  }
+  if (Number.isFinite(provider.resetCreditsAvailable) && provider.resetCreditsAvailable > 0) {
+    lines.push(_("Limit Reset Credits: %d available").format(provider.resetCreditsAvailable));
+  }
+  if (typeof provider.plan === "string" && provider.plan) {
+    const plan = provider.plan[0].toUpperCase() + provider.plan.slice(1);
+    lines.push(_("Plan: %s").format(plan));
+  }
+  return lines;
+}
+
 /**
  * @param {unknown} willLastToReset
  * @param {string} direction "+" or "-".
@@ -214,6 +233,96 @@ function activeProviderIndex(providers, currentIndex) {
     : available;
 }
 
+function validBrowserSummary(data, profile, now = Date.now()) {
+  const age = (now - Date.parse(data?.updatedAt)) / 1000;
+  if (data?.source !== profile || !Number.isFinite(age) || age < 0 || age > 3600) return false;
+  if (data?.status === "error") return typeof data.error === "string" && data.error.length <= 200;
+  const numeric = (value) => typeof value === "number" && Number.isFinite(value);
+  if (data.provider === "deepseek") {
+    return numeric(data.todayTokens) && numeric(data.periodTokens) && numeric(data.todayCost) &&
+      numeric(data.periodCost) && numeric(data.requestCount) && numeric(data.periodRequests) &&
+      data.todayTokens >= 0 && data.periodTokens >= 0 && data.todayCost >= 0 && data.periodCost >= 0 &&
+      data.requestCount >= 0 && data.periodRequests >= 0 && numeric(data.apiKeyCount) && data.apiKeyCount >= 0 &&
+      typeof data.currency === "string" && typeof data.periodLabel === "string" &&
+      (data.topModel === null || typeof data.topModel === "string") &&
+      Array.isArray(data.modelCosts) && data.modelCosts.length <= 100 &&
+      data.modelCosts.every((model) => typeof model.model === "string" && numeric(model.cost) && model.cost >= 0) &&
+      Array.isArray(data.daily) && data.daily.length <= 31 &&
+      data.daily.every((day) => typeof day.date === "string" && numeric(day.tokens) && numeric(day.cost));
+  }
+  if (data.provider === "codex" || data.provider === "opencodego") {
+    const windowsValid = Array.isArray(data.extraWindows || data.windows) &&
+      (data.extraWindows || data.windows).length <= 20 &&
+      (data.extraWindows || data.windows).every((window) => typeof window.label === "string" &&
+        numeric(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100);
+    return windowsValid;
+  }
+  return false;
+}
+
+function validConsoleUsage(usage) {
+  const fields = ["totalRequests", "totalInputTokens", "totalOutputTokens", "totalCacheReadTokens",
+    "totalCacheWrite5mTokens", "totalCacheWrite1hTokens", "totalCostMicroCents"];
+  const safe = (value) => Number.isSafeInteger(value) && value >= 0;
+  return usage?.summary && fields.every((key) => safe(usage.summary[key])) &&
+    (!usage.hours || (Array.isArray(usage.hours) && usage.hours.length <= 25 && usage.hours.every((hour) =>
+      typeof hour.date === "string" && safe(hour.cost) && safe(hour.tokens) && safe(hour.requests)))) &&
+    (!usage.models || (Array.isArray(usage.models) && usage.models.length <= 10 && usage.models.every((model) =>
+      typeof model.model === "string" && model.model.length <= 100 && safe(model.cost))));
+}
+
+function validHistoryDays(days, field) {
+  return Array.isArray(days) && days.length <= 30 && days.every((day, index) => {
+    if (!day || typeof day !== "object") return false;
+    const parsed = typeof day.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day.date)
+      ? new Date(`${day.date}T00:00:00Z`) : null;
+    const date = parsed && Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === day.date;
+    return date && (index === 0 || day.date > days[index - 1].date) &&
+      typeof day[field] === "number" && Number.isFinite(day[field]) && day[field] >= 0 && day[field] <= Number.MAX_SAFE_INTEGER;
+  });
+}
+
+function validActivityHistory(history) {
+  const count = (value) => Number.isSafeInteger(value) && value >= 0;
+  return history && typeof history.periodLabel === "string" && history.periodLabel.length <= 80 &&
+    count(history.todayTokens) && count(history.periodTokens) && validHistoryDays(history.daily, "tokens") &&
+    history.daily.every((day) => count(day.tokens));
+}
+
+function validCreditHistory(history) {
+  const count = (value) => typeof value === "number" && Number.isFinite(value) && value >= 0;
+  return history && typeof history.periodLabel === "string" && history.periodLabel.length <= 80 &&
+    count(history.todayCredits) && count(history.periodCredits) && validHistoryDays(history.daily, "credits") &&
+    Array.isArray(history.events) && history.events.length <= 10 && history.events.every((event) =>
+      event && validHistoryDays([{ date: event.date, credits: event.credits }], "credits") &&
+      typeof event.service === "string" && event.service.length <= 100 && count(event.credits)) &&
+    typeof history.eventsPartial === "boolean";
+}
+
+function historyDayDetail(date, value, label) {
+  const daily = /^\d{4}-\d{2}-\d{2}$/.test(date);
+  const stamp = new Date(daily ? `${date}T00:00:00Z` : date);
+  const options = daily ? { month: "short", day: "numeric", timeZone: "UTC" } :
+    { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" };
+  const compact = Number.isFinite(stamp.getTime()) ? new Intl.DateTimeFormat(undefined, options).format(stamp) : date;
+  return _("%s · %s").format(compact, label(value));
+}
+
+function nonzeroDetails(parts) {
+  return parts.filter(([value]) => Number.isFinite(value) && value > 0).map(([, text]) => text).join(" · ");
+}
+
+function browserHelperNotice(enabled, profile, data, now = Date.now()) {
+  if (!enabled) return "";
+  if (!profile) return _("Choose a browser profile in Settings to enable browser usage.");
+  if (!validBrowserSummary(data, profile, now)) return _("No recent browser usage. Check the helper service in Settings.");
+  return "";
+}
+
+function browserCacheFilename(provider) {
+  return `browser-usage-${provider}.json`;
+}
+
 export default class CodexBarExtension extends Extension {
   enable() {
     this._settings = this.getSettings();
@@ -252,17 +361,20 @@ export default class CodexBarExtension extends Extension {
     // The section's own actor has to join the menu box: addMenuItem fills the
     // section's box, which renders only when the section is in the tree.
     this._footerBox = new PopupMenu.PopupMenuSection();
+    this._historyBox = new PopupMenu.PopupMenuSection();
     this._indicator.menu.box.add_child(this._tabsBox);
     this._indicator.menu.box.add_child(this._contentBox);
+    this._indicator.menu.addMenuItem(this._historyBox);
     this._indicator.menu.box.add_child(this._footerBox.actor);
 
     this._providers = [];
     this._activeIndex = 0;
     this._cost = null;
+    this._browserSummaries = {};
+    this._browserLoadGeneration = 0;
     this._stale = false;
     this._error = null;
     this._refreshing = false;
-    this._firstRun = true;
     this._cancellable = null;
 
     Main.panel.addToStatusArea(this.uuid, this._indicator);
@@ -274,11 +386,17 @@ export default class CodexBarExtension extends Extension {
       () => this._updateUI(),
       "changed::primary-provider",
       () => this._updateUI(),
+      "changed::show-browser-summary",
+      () => { this._loadBrowserSummary(); this._updateUI(); },
+      "changed::browser-profile",
+      () => { this._loadBrowserSummary(); this._updateUI(); },
       this,
     );
 
     this._buildFooter();
+    this._loadBrowserSummary();
     this._setupTimer();
+    this._startTick();
     this._refresh();
   }
 
@@ -304,9 +422,12 @@ export default class CodexBarExtension extends Extension {
     this._tabsBox = null;
     this._contentBox = null;
     this._footerBox = null;
+    this._historyBox = null;
     this._panelTrack = null;
     this._panelFill = null;
     this._providers = [];
+    this._browserSummaries = {};
+    this._browserLoadGeneration++;
     this._refreshing = false;
   }
 
@@ -314,6 +435,31 @@ export default class CodexBarExtension extends Extension {
     if (this._timeoutId) {
       GLib.Source.remove(this._timeoutId);
       this._timeoutId = null;
+    }
+  }
+
+  _loadBrowserSummary() {
+    const generation = ++this._browserLoadGeneration;
+    this._browserSummaries = {};
+    if (!this._settings?.get_boolean("show-browser-summary")) return;
+    const profile = this._settings.get_string("browser-profile");
+    for (const provider of ["deepseek", "opencodego", "codex"]) {
+      const name = browserCacheFilename(provider);
+      const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_cache_dir(), "codexbar", name]));
+      file.load_contents_async(null, (source, result) => {
+        try {
+          const bytes = source.load_contents_finish(result)[1];
+          if (!this._indicator || generation !== this._browserLoadGeneration ||
+              !this._settings?.get_boolean("show-browser-summary") ||
+              profile !== this._settings.get_string("browser-profile")) return;
+          const data = JSON.parse(new TextDecoder().decode(bytes));
+          if (data.provider !== provider || !validBrowserSummary(data, profile)) return;
+          this._browserSummaries[provider] = data;
+          if (this._indicator.menu.isOpen) this._updateUI();
+        } catch (e) {
+          // An absent or malformed optional cache does not affect CLI usage.
+        }
+      });
     }
   }
 
@@ -357,13 +503,10 @@ export default class CodexBarExtension extends Extension {
 
       this._activeIndex = activeProviderIndex(providers, this._activeIndex);
       this._providers = providers;
+      this._loadBrowserSummary();
       this._cost = cost;
       this._error = null;
       this._stale = false;
-      if (this._firstRun) {
-        this._firstRun = false;
-        this._startTick();
-      }
       if (this._activeIndex >= providers.length) this._activeIndex = 0;
       try {
         this._updateUI();
@@ -391,6 +534,7 @@ export default class CodexBarExtension extends Extension {
   _startTick() {
     if (this._tickId) GLib.Source.remove(this._tickId);
     this._tickId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 60, () => {
+      this._loadBrowserSummary();
       this._updatePanelIcon();
       if (this._indicator?.menu.isOpen) this._updateUI();
       return GLib.SOURCE_CONTINUE;
@@ -596,6 +740,7 @@ export default class CodexBarExtension extends Extension {
 
     this._tabsBox.destroy_all_children();
     this._contentBox.destroy_all_children();
+    this._historyBox.removeAll();
 
     if (!findCodexBar()) {
       this._contentBox.add_child(this._messageBox(
@@ -651,11 +796,99 @@ export default class CodexBarExtension extends Extension {
 
     for (const window of provider.windows) {
       this._contentBox.add_child(
-        window.meter ? this._buildMeter(window) : this._buildBalance(window),
+        window.meter ? this._buildMeter(window, provider.id === "codex") : this._buildBalance(window),
       );
     }
 
-    if (this._cost) this._contentBox.add_child(this._buildCost());
+    if (provider.id === "codex") {
+      for (const text of formatCodexDetails(provider)) {
+        this._contentBox.add_child(dimLabel({ text }));
+      }
+    }
+
+    if (this._cost?.providers?.some((entry) => entry.id === provider.id &&
+        [entry.todayCost, entry.todayTokens, entry.cost, entry.tokens].some((value) => value > 0))) {
+      this._contentBox.add_child(this._buildCost(provider.id));
+    }
+
+    const profile = this._settings.get_string("browser-profile");
+    const cachedBrowserSummary = this._browserSummaries?.[provider.id];
+    const browserSummary = validBrowserSummary(cachedBrowserSummary, profile) ? cachedBrowserSummary : null;
+    if (["deepseek", "codex", "opencodego"].includes(provider.id)) {
+      const notice = browserHelperNotice(this._settings.get_boolean("show-browser-summary"), profile, browserSummary);
+      if (notice) {
+        const label = dimLabel({ text: notice, width: BAR_WIDTH_PX });
+        label.clutter_text.line_wrap = true;
+        this._contentBox.add_child(label);
+      }
+    }
+    if (browserSummary?.status === "error") {
+      this._contentBox.add_child(dimLabel({ text: _("Browser helper: %s").format(browserSummary.error) }));
+    }
+    if (provider.id === "deepseek" && browserSummary?.status !== "error" && browserSummary?.provider === "deepseek") {
+      this._contentBox.add_child(this._buildBrowserSummary(browserSummary));
+      this._addHistorySubmenu(_("Usage history · %s").format(browserSummary.periodLabel), browserSummary.daily || [], [
+        { field: "cost", label: _("Spend"), format: (v) => this._browserMoney(browserSummary, v) },
+        { field: "tokens", label: _("Tokens"), format: formatTokens },
+      ]);
+    }
+    if (provider.id === "codex" && browserSummary?.status !== "error" && browserSummary?.provider === "codex") {
+      const expected = typeof provider.account === "string" ? provider.account.trim().toLowerCase() : "";
+      const expectedHash = expected ? GLib.compute_checksum_for_string(GLib.ChecksumType.SHA256, expected, -1) : null;
+      if (!expected || (expectedHash && expectedHash === browserSummary.emailHash)) {
+        this._contentBox.add_child(this._buildBrowserWindows(
+          browserSummary.extraWindows || [], _("Codex web additional limits")));
+        if (Number.isFinite(browserSummary.credits) && browserSummary.credits > 0) {
+          this._contentBox.add_child(dimLabel({ text: _("Web credits: %s").format(browserSummary.credits.toFixed(2)) }));
+        }
+        this._addCodexHistory(browserSummary);
+        if (browserSummary.historyStatus === "requires-webkit-dashboard") {
+          this._contentBox.add_child(dimLabel({ text: _("Codex web usage history requires the upstream WebKit dashboard and is unavailable here") }));
+        }
+        for (const [history, valid, todayKey, periodKey, label, format] of [
+          [browserSummary.activityHistory, validActivityHistory, "todayTokens", "periodTokens", _("Web tokens"), formatTokens],
+          [browserSummary.creditHistory, validCreditHistory, "todayCredits", "periodCredits", _("Web credits"), (v) => v.toFixed(2)],
+        ]) {
+          if (!valid(history)) continue;
+          const text = nonzeroDetails([[history[todayKey], _("%s today").format(format(history[todayKey]))],
+            [history[periodKey], _("%s in last 30 days").format(format(history[periodKey]))]]);
+          if (text) this._contentBox.add_child(dimLabel({ text: `${label}: ${text}` }));
+        }
+      }
+    }
+    if (provider.id === "opencodego" && browserSummary?.status !== "error" && browserSummary?.provider === "opencodego") {
+      if (Number.isFinite(browserSummary.balanceUSD) && browserSummary.balanceUSD > 0) {
+        this._contentBox.add_child(dimLabel({ text: _("Prepaid Zen balance: $%s").format(Number(browserSummary.balanceUSD).toFixed(2)) }));
+      }
+      if (browserSummary.consoleUsageError) {
+        this._contentBox.add_child(dimLabel({ text: _(browserSummary.consoleUsageError) }));
+      } else if (validConsoleUsage(browserSummary.consoleUsage)) {
+        const usage = browserSummary.consoleUsage;
+        const summary = usage.summary;
+        const tokens = summary.totalInputTokens + summary.totalOutputTokens + summary.totalCacheReadTokens +
+          summary.totalCacheWrite5mTokens + summary.totalCacheWrite1hTokens;
+        const totals = nonzeroDetails([
+          [summary.totalCostMicroCents, _("Reported cost: $%s").format((summary.totalCostMicroCents / 100_000_000).toFixed(2))],
+          [tokens, _("%s tokens").format(formatTokens(tokens))], [summary.totalRequests, _("%s requests").format(formatTokens(summary.totalRequests))],
+        ]);
+        if (totals) {
+          this._contentBox.add_child(dimLabel({ text: _("Console usage · last 24 hours (all organization usage)") }));
+          this._contentBox.add_child(dimLabel({ text: totals }));
+        }
+        if (usage.hours?.length) this._addHistorySubmenu(_("Cost history (24 hours)"), usage.hours.map((h) => ({
+          date: h.date, cost: h.cost / 100_000_000, tokens: h.tokens, requests: h.requests,
+        })), [{ field: "cost", label: _("Reported cost"), format: (v) => `$${v.toFixed(2)}` }]);
+        const models = (usage.models || []).filter((model) => model.cost > 0);
+        if (models.length) {
+          const item = new PopupMenu.PopupSubMenuMenuItem(_("Models · reported cost"));
+          this._addChartToMenu(item.menu, models, "cost", (v) => `$${(v / 100_000_000).toFixed(2)}`, "model");
+          if (usage.modelsPartial) item.menu.addMenuItem(new PopupMenu.PopupMenuItem(_("Top 10 models only"), { reactive: false }));
+          this._historyBox.addMenuItem(item);
+        }
+        if (usage.historyUnavailable) this._contentBox.add_child(dimLabel({ text: _("Usage history unavailable") }));
+        if (totals) this._contentBox.add_child(dimLabel({ text: _("Reported Console usage; not out-of-pocket billing") }));
+      }
+    }
 
     // Bars are sized in pixels against the track, so the popup needs a fixed
     // width to fill. Without it the menu shrinks to the widest label.
@@ -728,7 +961,7 @@ export default class CodexBarExtension extends Extension {
    * @param {object} window
    * @returns {St.BoxLayout}
    */
-  _buildMeter(window) {
+  _buildMeter(window, isCodex = false) {
     const box = new St.BoxLayout({ vertical: true, x_expand: true });
     box.add_child(new St.Label({ text: window.label, style_class: "codexbar-section" }));
 
@@ -771,11 +1004,11 @@ export default class CodexBarExtension extends Extension {
     }
     box.add_child(row);
 
-    // Only warn when the window is actually being over-consumed. The macOS app
-    // does the same: a healthy window says nothing, and the tick in the bar
-    // already carries the "you are fine" signal.
-    if (this._settings.get_boolean("show-pace") && isExceedingPace(window)) {
-      const pace = formatPace(window.pace, window.usedPercent);
+    // Other providers only warn when over-consumed; Codex's CLI summary also
+    // gives a useful run-out estimate while on pace.
+    const codexPace = isCodex ? formatCodexPace(window.pace) : "";
+    if (this._settings.get_boolean("show-pace") && (codexPace || isExceedingPace(window))) {
+      const pace = codexPace || formatPace(window.pace, window.usedPercent);
       if (pace) {
         const paceLabel = dimLabel({ text: pace });
         paceLabel.opacity = FAINT_TEXT_OPACITY;
@@ -814,20 +1047,147 @@ export default class CodexBarExtension extends Extension {
    * The macOS cost summary: today and the last 30 days, cost and tokens.
    * @returns {St.BoxLayout}
    */
-  _buildCost() {
+  _buildCost(providerId) {
+    const providerCost = this._cost.providers.find((entry) => entry.id === providerId);
+    if (!providerCost) return new St.Widget();
     const box = new St.BoxLayout({ vertical: true, x_expand: true });
-    box.add_child(new St.Label({ text: _("Cost"), style_class: "codexbar-section" }));
+    box.add_child(new St.Label({ text: _("Local cost estimate"), style_class: "codexbar-section" }));
 
     const row = (label, cost, tokens) => {
+      const text = nonzeroDetails([[cost, formatMoney(cost, providerCost.currency)], [tokens, _("%s tokens").format(formatTokens(tokens))]]);
+      if (!text) return;
       const line = new St.BoxLayout({ x_expand: true });
       line.add_child(dimLabel({
-        text: `${label}: ${formatMoney(cost, this._cost.currency)} · ${formatTokens(tokens)} tokens`,
+        text: `${label}: ${text}`,
       }));
-      return line;
+      box.add_child(line);
     };
 
-    box.add_child(row(_("Today"), this._cost.today, this._cost.todayTokens));
-    box.add_child(row(_("Last 30 days"), this._cost.total, this._cost.totalTokens));
+    row(_("Today"), providerCost.todayCost, providerCost.todayTokens);
+    row(_("All time"), providerCost.cost, providerCost.tokens);
+    return box;
+  }
+
+  _buildBrowserSummary(data) {
+    const box = new St.BoxLayout({ vertical: true, x_expand: true });
+    box.add_child(new St.Label({ text: _("Browser usage · %s").format(data.periodLabel), style_class: "codexbar-section" }));
+    const line = (label, value) => {
+      if (!value) return;
+      const row = new St.BoxLayout({ x_expand: true });
+      row.add_child(dimLabel({ text: label, x_expand: true }));
+      row.add_child(dimLabel({ text: value, x_align: Clutter.ActorAlign.END }));
+      box.add_child(row);
+    };
+    const money = (value) => this._browserMoney(data, value);
+    const totals = (tokens, cost) => nonzeroDetails([[tokens, _("%s tokens").format(formatTokens(tokens))], [cost, money(cost)]]);
+    line(_("Today"), totals(data.todayTokens, data.todayCost));
+    const recent = (data.daily || []).slice(-7);
+    if (recent.length) line(_("Last 7 days"), totals(recent.reduce((sum, day) => sum + day.tokens, 0), recent.reduce((sum, day) => sum + day.cost, 0)));
+    line(data.periodLabel, totals(data.periodTokens, data.periodCost));
+    line(_("Requests"), nonzeroDetails([[data.requestCount, _("%s today").format(formatTokens(data.requestCount))],
+      [data.periodRequests, _("%s in period").format(formatTokens(data.periodRequests))]]));
+    if (data.topModel) line(_("Top model"), data.topModel);
+    box.add_child(dimLabel({ text: _("Experimental browser session data"), opacity: FAINT_TEXT_OPACITY }));
+    return box;
+  }
+
+  _browserMoney(data, value) {
+    return `${({ USD: "$", CNY: "¥" })[data.currency] || `${data.currency} `}${Number(value || 0).toFixed(2)}`;
+  }
+
+  _addHistorySubmenu(title, days, series) {
+    series = series.filter(({ field }) => days.some((day) => day[field] > 0));
+    if (!series.length) return;
+    const item = new PopupMenu.PopupSubMenuMenuItem(title);
+    for (const { field, label, format } of series) {
+      item.menu.box.add_child(new St.Label({ text: label, style_class: "codexbar-section codexbar-history-inset" }));
+      this._addChartToMenu(item.menu, days, field, format);
+    }
+    this._historyBox.addMenuItem(item);
+  }
+
+  _addCodexHistory(data) {
+    const activityValid = validActivityHistory(data.activityHistory);
+    const creditsValid = validCreditHistory(data.creditHistory);
+    if ((!activityValid || data.activityHistory.periodTokens === 0) && (!creditsValid || data.creditHistory.periodCredits === 0) &&
+        !data.activityHistoryError && !data.creditHistoryError) return;
+    if (!activityValid && !creditsValid && !data.activityHistoryError && !data.creditHistoryError) return;
+    const item = new PopupMenu.PopupSubMenuMenuItem(_("Codex web history"));
+    const add = (title, history, field, format, error) => {
+      const today = history?.[field === "tokens" ? "todayTokens" : "todayCredits"];
+      const period = history?.[field === "tokens" ? "periodTokens" : "periodCredits"];
+      if (!error && (!history || period === 0)) return;
+      item.menu.box.add_child(new St.Label({ text: title, style_class: "codexbar-section codexbar-history-inset" }));
+      if (error) {
+        item.menu.box.add_child(dimLabel({ text: error, style_class: "codexbar-subtitle codexbar-history-inset" }));
+        return;
+      }
+      if (!history) return;
+      const line = dimLabel({ style_class: "codexbar-subtitle codexbar-history-inset", text: nonzeroDetails([[today, _("Today: %s").format(format(today))],
+        [period, `${history.periodLabel}: ${format(period)}`]]) });
+      item.menu.box.add_child(line);
+      if (history.daily.length) {
+        this._addChartToMenu(item.menu, history.daily, field, format);
+      }
+      if (field === "credits") {
+        for (const event of history.events.filter((event) => event.credits > 0)) item.menu.box.add_child(dimLabel({ text: _("%s · %s credits").format(event.service, historyDayDetail(event.date, event.credits, format)), style_class: "codexbar-subtitle codexbar-history-inset" }));
+        if (history.eventsPartial) item.menu.box.add_child(dimLabel({ text: _("Most recent events only"), style_class: "codexbar-subtitle codexbar-history-inset" }));
+      }
+    };
+    add(_("Token activity"), activityValid ? data.activityHistory : null, "tokens", formatTokens, data.activityHistoryError || (!activityValid ? _("Token activity unavailable") : ""));
+    add(_("Credits"), creditsValid ? data.creditHistory : null, "credits", (v) => `${Number(v).toFixed(2)}`, data.creditHistoryError || (!creditsValid ? _("Credit history unavailable") : ""));
+    this._historyBox.addMenuItem(item);
+  }
+
+  _addChartToMenu(menu, days, field, format, labelField = "date") {
+    const detail = dimLabel({ text: labelField === "model" ? _("Hover or focus a model for details") : _("Hover or focus a bar for details"),
+      width: BAR_WIDTH_PX, x_expand: true, style_class: "codexbar-history-detail" });
+    detail.clutter_text.line_wrap = true;
+    menu.box.add_child(detail);
+    const maximum = Math.max(0, ...days.map((day) => day[field]));
+    const row = new St.BoxLayout({ width: BAR_WIDTH_PX, x_expand: true, y_align: Clutter.ActorAlign.END, style_class: "codexbar-history-chart" });
+    row.layout_manager.homogeneous = true;
+    days.forEach((day) => {
+      const description = labelField === "model" ? _("%s · %s").format(day.model, format(day[field])) : historyDayDetail(day.date, day[field], format);
+      const button = new St.Button({ can_focus: true, x_expand: true, style_class: "codexbar-history-day",
+        accessible_name: description });
+      button.set_child(new St.Widget({ style_class: "codexbar-history-bar",
+        x_expand: true, x_align: Clutter.ActorAlign.FILL,
+        height: maximum ? Math.max(2, Math.round(48 * day[field] / maximum)) : 2, y_align: Clutter.ActorAlign.END }));
+      const show = () => {
+        detail.text = description;
+        if (field !== "tokens" && day.tokens > 0) detail.text += _(" · %s tokens").format(formatTokens(day.tokens));
+        if (day.requests > 0) detail.text += _(" · %s requests").format(formatTokens(day.requests));
+      };
+      button.connect("clicked", show);
+      button.connect("enter-event", show);
+      button.connect("key-focus-in", show);
+      row.add_child(button);
+    });
+    menu.box.add_child(row);
+  }
+
+  _buildBrowserWindows(windows, title) {
+    const box = new St.BoxLayout({ vertical: true, x_expand: true });
+    if (!windows.length) return box;
+    box.add_child(new St.Label({ text: title, style_class: "codexbar-section" }));
+    for (const window of windows) {
+      const row = new St.BoxLayout({ vertical: true, x_expand: true });
+      row.add_child(dimLabel({ text: window.label }));
+      const track = new St.Widget({ style_class: "codexbar-bar-track", width: BAR_WIDTH_PX, height: 8 });
+      const percent = Math.max(0, Math.min(100, Number(window.usedPercent) || 0));
+      track.add_child(new St.Widget({
+        style_class: "codexbar-bar-fill",
+        width: fillWidth(BAR_WIDTH_PX, percent),
+        height: 8,
+        x: 0,
+        style: `background-color: ${barColor(percent)};`,
+      }));
+      track.accessible_name = _("%s: %d%% used").format(window.label, percent);
+      row.add_child(track);
+      row.add_child(dimLabel({ text: _("%d%% used").format(percent) }));
+      box.add_child(row);
+    }
     return box;
   }
 

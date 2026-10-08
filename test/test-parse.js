@@ -102,6 +102,15 @@ check(
 );
 check("account", ds.account, "personal");
 
+console.log("codex: parse credits, plan, and pace summary");
+const codex = parseUsagePayload(loadFixture("usage-codex.json")).providers[0];
+check("codex kind", codex.kind, "windows");
+check("codex credits remaining", codex.creditsRemaining, 0);
+check("codex reset credits available", codex.resetCreditsAvailable, 0);
+check("codex plan", codex.plan, "plus");
+check("codex pace summary", codex.windows[0].pace.summary,
+  "On pace | Expected 5% used | Runs out in 6d 14h");
+
 console.log("errors surface as a tab, not a crash");
 const withError = parseUsagePayload([
   { provider: "opencodego", source: "local+api", usage: loadFixture("usage-opencodego.json")[0].usage },

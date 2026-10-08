@@ -166,6 +166,9 @@ function parseProvider(entry) {
     ...base,
     kind: windows.length === 0 ? "error" : windows.some((w) => w.meter) ? "windows" : "balance",
     windows,
+    creditsRemaining: entry.credits?.remaining ?? null,
+    resetCreditsAvailable: entry.resetCredits?.available ?? null,
+    plan: usage.identity?.loginMethod || usage.loginMethod || null,
     updatedAt: usage.updatedAt || null,
     error: windows.length === 0 ? "No usage windows reported" : null,
   };
