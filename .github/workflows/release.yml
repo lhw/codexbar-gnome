@@ -4,8 +4,11 @@ name: release
 #
 # Triggered on workflow_run rather than on `release: published`, because
 # release-please publishes with GITHUB_TOKEN and events from that token do not
-# trigger further workflow runs. Waiting for release-please to finish sidesteps
-# that, and checking the conclusion guards against a failed release run.
+# trigger further workflow runs.
+#
+# workflow_run fires after every release-please run, including ones that only
+# opened a release PR, so the first step checks whether a release was actually
+# cut and skips the expensive gnome-shell install when it was not.
 on:
   workflow_run:
     workflows: ["release-please"]
@@ -24,7 +27,25 @@ jobs:
         with:
           ref: main
 
+      - name: Check whether a release was actually cut
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          TAG="$(gh release view --json tagName --jq .tagName)"
+          TAG_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha)"
+          if [ "$TAG_SHA" = "$HEAD_SHA" ]; then
+            echo "New release $TAG at $TAG_SHA, building"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No new release (latest is $TAG at $TAG_SHA), skipping"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install build dependencies
+        if: steps.gate.outputs.build == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
@@ -33,9 +54,11 @@ jobs:
             libglib2.0-bin
 
       - name: Build
+        if: steps.gate.outputs.build == 'true'
         run: ./build.sh
 
-      - name: Attach extension zip to the latest release
+      - name: Attach extension zip to the release
+        if: steps.gate.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
