@@ -2,7 +2,6 @@
 // shell log so ui-test.sh can assert on it, including after switching tabs.
 // Never shipped.
 import GLib from "gi://GLib";
-import Gio from "gi://Gio";
 import St from "gi://St";
 import * as Main from "resource:///org/gnome/shell/ui/main.js";
 import { Extension } from "resource:///org/gnome/shell/extensions/extension.js";
@@ -84,20 +83,6 @@ export default class CodexBarDumper extends Extension {
       print("NO-PANEL-BUTTON");
       print("CODEXBAR-DUMP-END");
       return;
-    }
-
-    // Read the setting straight from dconf so a mis-set value is visible rather
-// than inferred from the bar width. The target extension's own settings object
-// is not reachable from here.
-    try {
-      const source = Gio.SettingsSchemaSource.get_default();
-      const schema = source.lookup("org.gnome.shell.extensions.codexbar", true);
-      const settings = new Gio.Settings({ settings_schema: schema });
-      print(
-        `CODEXBAR-DUMP setting primary-provider=${JSON.stringify(settings.get_string("primary-provider"))}`,
-      );
-    } catch (e) {
-      print(`CODEXBAR-DUMP setting read failed: ${e.message}`);
     }
 
     button.menu.open();

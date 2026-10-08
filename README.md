@@ -58,14 +58,25 @@ every enabled provider in one call, so there is no provider list to configure.
 ./ui-test.sh    # loads the extension in a headless shell and dumps the menu
 ```
 
-`build.sh` runs four headless suites (`test/test-parse.js`,
-`test/test-cost.js`, `test/test-display.js`, `test/test-links.js`) against JSON
-fixtures captured from the real CLI in `fixtures/`.
+`build.sh` runs six headless suites (`test-parse`, `test-cost`, `test-display`,
+`test-links`, `test-prefs`, `test-cli`) against JSON fixtures captured from the
+real CLI in `fixtures/`. `test-cli.js` shells out to the actual binary.
 
-`ui-test.sh` starts an isolated headless GNOME Shell, enables the extension,
-and prints the rendered menu's icon, label, and bar geometry, which catches
-layout errors the unit tests cannot. It never touches your live session. Set
-`CODEXBAR_TEST_PRIMARY=<provider id>` to check the primary-provider setting.
+`ui-test.sh` starts an isolated headless GNOME Shell and prints the rendered
+menu's icons, labels, and bar geometry, which catches layout errors the unit
+tests cannot. It never touches your live session.
+
+Two things `ui-test.sh` has to be careful about, both learned the hard way:
+
+- It must shut the shell down with `SIGTERM` well inside its own timeout. A
+  shell killed with `SIGKILL` writes
+  `$XDG_RUNTIME_DIR/gnome-shell-disable-extensions`, which makes Ubuntu's
+  `org.gnome.Shell-disable-extensions.service` set
+  `disable-user-extensions=true` and switch off *every* user extension at the
+  next login.
+- `dbus-run-session` gives a new bus but not a new dconf database, so enabling
+  the throwaway companion extension writes to the real one. The script snapshots
+  and restores `enabled-extensions` around the run.
 
 ## Panel indicator and tabs
 

@@ -6,8 +6,6 @@
 # tests cannot, and lets us assert on the exact strings the user sees.
 #
 # Usage: ./ui-test.sh [timeout-seconds]
-# Set CODEXBAR_TEST_PRIMARY=<provider id> to exercise the primary-provider
-# setting.
 
 set -u
 cd "$(dirname "$0")"
@@ -42,27 +40,42 @@ echo "Running $UUID in a headless shell (timeout ${SECS}s)..."
 export CODEXBAR_DUMP_TARGET="$UUID"
 export GSETTINGS_SCHEMA_DIR="$EXT_ROOT/$UUID/schemas"
 
-# dconf is per-session, so a setting written outside the shell's session never
-# reaches it. The keyfile backend is a plain file both processes can see.
-#
-# XDG_CONFIG_HOME must stay the real one: codexbar resolves its own config from
-# it, and pointing it elsewhere silently reduces the fixture to one provider.
-export GSETTINGS_BACKEND=keyfile
-export GSETTINGS_BACKEND_KEYFILE="${GSETTINGS_BACKEND_KEYFILE:-${TMPDIR:-/tmp}/codexbar-ui-test-settings}"
+# The test enables a throwaway companion extension over D-Bus and sets the
+# primary-provider knob. Both write to the real dconf database: dbus-run-session
+# gives a new bus but not a new dconf, and GSETTINGS_BACKEND=keyfile is not
+# honoured by this GLib build. Snapshot both and restore them afterwards so a
+# test run cannot leave anything behind.
+SAVED_EXTENSIONS="$(gsettings get org.gnome.shell enabled-extensions)"
+
+restore_state() {
+  gsettings set org.gnome.shell enabled-extensions "$SAVED_EXTENSIONS" 2>/dev/null || true
+}
+trap restore_state EXIT INT TERM
 
 timeout "$SECS" dbus-run-session -- bash -c "
   gnome-shell --headless --wayland >"${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>&1 &
   SHELL_PID=\$!
   sleep 9
-  if [ -n \"\${CODEXBAR_TEST_PRIMARY:-}\" ]; then
-    gsettings --schemadir '$GSETTINGS_SCHEMA_DIR' set org.gnome.shell.extensions.codexbar primary-provider \"\$CODEXBAR_TEST_PRIMARY\" 2>&1
-  fi
   $ENABLE_DUMPER
   $ENABLE_TARGET
   sleep 22
   $GET_ERRORS
-  kill \$SHELL_PID 2>/dev/null
+  # Must be a graceful TERM, and must happen well inside the timeout below. A
+  # shell killed by SIGKILL writes \$XDG_RUNTIME_DIR/gnome-shell-disable-extensions,
+  # which makes Ubuntu's org.gnome.Shell-disable-extensions.service turn off
+  # every user extension at the next login.
+  kill -TERM \$SHELL_PID 2>/dev/null
+  wait \$SHELL_PID 2>/dev/null
 " 2>&1 | grep -E "^\(" > "${TMPDIR:-/tmp}/codexbar-ui-errors.txt"
+
+# Belt and braces: if the run was cut short by the timeout above, clear the flag
+# GNOME Shell leaves behind so the user's next login is not affected.
+DISABLE_FLAG="$XDG_RUNTIME_DIR/gnome-shell-disable-extensions"
+if [ -e "$DISABLE_FLAG" ]; then
+  echo "WARNING: cleared $DISABLE_FLAG left by an unclean shutdown" >&2
+  rm -f "$DISABLE_FLAG"
+  gsettings set org.gnome.shell disable-user-extensions false
+fi
 
 echo "=== menu tree ==="
 sed -n '/CODEXBAR-DUMP-START/,/CODEXBAR-DUMP-END/p' "${TMPDIR:-/tmp}/codexbar-ui-shell.log" 2>/dev/null \
