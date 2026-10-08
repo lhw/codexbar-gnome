@@ -18,14 +18,16 @@
 /* Provider tab strip. Icons only; the name is in the tooltip and the
    accessible name. */
 .codexbar-tabs {
-    spacing: 2px;
-    padding: 8px 12px 0;
+    spacing: 4px;
+    padding: 10px 12px 0;
 }
 
 .codexbar-tab {
-    padding: 4px 6px;
-    border-radius: 6px;
-    spacing: 3px;
+    /* Generous padding around a smaller logo: the tab has to be an easy target
+       now that it carries no text label. */
+    padding: 7px 9px;
+    border-radius: 8px;
+    spacing: 4px;
 }
 
 .codexbar-tab:hover {
@@ -34,11 +36,14 @@
 
 .codexbar-tab-active {
     background-color: rgba(127, 127, 127, 0.22);
+    /* Without a text label, the active tab needs a stronger edge to read at a
+       glance. */
+    box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.45);
 }
 
 .codexbar-provider-icon {
     /* Mirrors TAB_ICON_SIZE in extension.js. */
-    icon-size: 26px;
+    icon-size: 22px;
 }
 
 /* Fallback tile for providers with no bundled logo. */
@@ -51,7 +56,7 @@
 .codexbar-tab-track {
     height: 3px;
     /* Mirrors TAB_TRACK_WIDTH in extension.js. */
-    width: 26px;
+    width: 22px;
     border-radius: 2px;
     background-color: rgba(127, 127, 127, 0.25);
 }

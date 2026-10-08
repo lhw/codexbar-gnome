@@ -26,8 +26,9 @@ import { ABOUT_URL, ADD_ACCOUNT_URL, INSTALL_URL, statusUrl, usageUrl } from "./
 const SECONDARY_TEXT_OPACITY = 200;
 const FAINT_TEXT_OPACITY = 150;
 
-// Tab logos. The macOS app shows these large enough to recognise at a glance.
-const TAB_ICON_SIZE = 26;
+// Tab logos. Sized so the padded tab reads as a comfortable target, the way the
+// macOS app spaces its provider strip.
+const TAB_ICON_SIZE = 22;
 const TAB_TRACK_WIDTH = TAB_ICON_SIZE;
 
 // Panel indicator. The GNOME top panel is 32px tall with 16px icons. This bar
