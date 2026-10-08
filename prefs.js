@@ -55,30 +55,52 @@ function fetchProvidersAsync(onDone) {
     return;
   }
 
-  proc.get_stdout_pipe().read_bytes_async(
-    4 * 1024 * 1024,
-    GLib.PRIORITY_DEFAULT,
-    null,
-    (stream, result) => {
-      const ids = [];
-      const names = new Map();
-      try {
-        const [ok, bytes] = stream.read_bytes_finish(result);
-        const parsed = ok && bytes.length ? JSON.parse(new TextDecoder().decode(bytes)) : [];
-        for (const entry of Array.isArray(parsed) ? parsed : []) {
-          // Disabled providers cannot be tracked, and default-disabled ones are
-          // simply not configured.
-          if (!entry?.provider || entry.enabled !== true) continue;
-          ids.push(String(entry.provider));
-          if (entry.displayName) names.set(ids[ids.length - 1], String(entry.displayName));
+  // read_bytes_async's count is a per-read size, not a total, so a single call
+  // truncates anything longer than it. `config providers` is around 4.5KB for
+  // the full provider list, so drain the stream until EOF instead.
+  const decoder = new TextDecoder();
+  let text = "";
+  const readMore = () => {
+    proc.get_stdout_pipe().read_bytes_async(
+      64 * 1024,
+      GLib.PRIORITY_DEFAULT,
+      null,
+      (stream, result) => {
+        try {
+          const bytes = stream.read_bytes_finish(result);
+          if (bytes.get_size() === 0) {
+            finish(text);
+            return;
+          }
+          text += decoder.decode(bytes.get_data());
+          readMore();
+        } catch (e) {
+          onDone([], new Map());
         }
-      } catch (e) {
-        onDone([], new Map());
-        return;
+      },
+    );
+  };
+
+  const finish = (raw) => {
+    const ids = [];
+    const names = new Map();
+    try {
+      const parsed = raw.trim() ? JSON.parse(raw) : [];
+      for (const entry of Array.isArray(parsed) ? parsed : []) {
+        // Disabled providers cannot be tracked, and default-disabled ones are
+        // simply not configured.
+        if (!entry?.provider || entry.enabled !== true) continue;
+        ids.push(String(entry.provider));
+        if (entry.displayName) names.set(ids[ids.length - 1], String(entry.displayName));
       }
-      onDone(ids, names);
-    },
-  );
+    } catch (e) {
+      onDone([], new Map());
+      return;
+    }
+    onDone(ids, names);
+  };
+
+  readMore();
 }
 
 export default class CodexBarPreferences extends ExtensionPreferences {

@@ -55,32 +55,51 @@ export async function runCodexBar(args, cancellable, timeoutS = USAGE_TIMEOUT_S)
     Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
   );
 
-  // Read both pipes concurrently: waiting on stdout first can deadlock once the
-  // stderr buffer fills, and waiting on stderr first can deadlock the same way
-  // if stdout fills instead.
-  const readPipe = (pipe, limit) =>
+  // Drain a pipe until EOF and return its text.
+  //
+  // Two traps here, both of which have bitten:
+  //   - GJS returns a single GLib.Bytes from read_bytes_finish, not an
+  //     [ok, bytes] tuple, so the result must not be destructured.
+  //   - read_bytes_async's count is a per-read size, not a total, so one call
+  //     silently truncates longer output.
+  //
+  // Both pipes are drained concurrently: waiting on stdout first can deadlock
+  // once the stderr buffer fills, and waiting on stderr first can deadlock the
+  // same way if stdout fills instead.
+  const readPipe = (pipe) =>
     new Promise((resolve, reject) => {
-      pipe.read_bytes_async(limit, GLib.PRIORITY_DEFAULT, cancellable, (src, res) => {
-        try {
-          resolve(src.read_bytes_finish(res));
-        } catch (e) {
-          reject(e);
-        }
-      });
+      const decoder = new TextDecoder();
+      let text = "";
+      const readMore = () => {
+        pipe.read_bytes_async(64 * 1024, GLib.PRIORITY_DEFAULT, cancellable, (src, res) => {
+          try {
+            const bytes = src.read_bytes_finish(res);
+            if (bytes.get_size() === 0) {
+              resolve(text);
+              return;
+            }
+            text += decoder.decode(bytes.get_data());
+            readMore();
+          } catch (e) {
+            reject(e);
+          }
+        });
+      };
+      readMore();
     });
 
-  let stdoutBytes;
+  let stdoutText = "";
   let stderrText = "";
   try {
-    [stdoutBytes, stderrText] = await Promise.all([
-      readPipe(proc.get_stdout_pipe(), 1024 * 1024),
-      readPipe(proc.get_stderr_pipe(), 64 * 1024).catch(() => new Uint8Array()),
+    [stdoutText, stderrText] = await Promise.all([
+      readPipe(proc.get_stdout_pipe()),
+      readPipe(proc.get_stderr_pipe()).catch(() => ""),
     ]);
   } catch (e) {
     proc.force_exit();
     throw new CodexBarError(e.message);
   }
-  const stderr = new TextDecoder().decode(stderrText);
+  const stderr = stderrText;
 
   const timeout = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, timeoutS, () => {
     proc.force_exit();
@@ -106,7 +125,7 @@ export async function runCodexBar(args, cancellable, timeoutS = USAGE_TIMEOUT_S)
     GLib.Source.remove(timeout);
   }
 
-  const text = new TextDecoder().decode(stdoutBytes).trim();
+  const text = stdoutText.trim();
 
   if (!text) {
     const detail = stderr.trim().split("\n").slice(-1)[0] || `exit ${exitStatus}`;

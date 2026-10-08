@@ -10,7 +10,7 @@ echo "Compiling schemas..."
 glib-compile-schemas schemas/
 
 echo "Running tests..."
-for t in test-parse test-cost test-display test-links test-prefs; do
+for t in test-parse test-cost test-display test-links test-prefs test-cli; do
   result="$(gjs -m "test/$t.js" 2>&1 | sed 's/^Gjs-Console-Message: [0-9:.]* //' | tail -1)"
   echo "  $t: $result"
   case "$result" in

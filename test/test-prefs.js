@@ -51,6 +51,10 @@ check("reports progress", /Reading providers/.test(src), true);
 console.log("only enabled providers are offered as tracked");
 check("skips disabled entries", /entry\.enabled !== true/.test(src), true);
 
+console.log("stdout is drained rather than read once");
+check("drains until EOF", /bytes\.get_size\(\) === 0/.test(src), true);
+check("does not destructure the finish result", /const \[ok, bytes\] =/.test(src), false);
+
 console.log("an unknown stored value stays visible instead of being dropped");
 check("keeps unknown value", /not enabled/.test(src), true);
 
