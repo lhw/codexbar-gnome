@@ -490,11 +490,10 @@ export default class CodexBarExtension extends Extension {
 
     this._footerBox.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
+    // No Quit item: this is an extension, not an application, so there is no
+    // process to exit. Disabling is the shell's job, via the Extensions app or
+    // `gnome-extensions disable`.
     add(_("About CodexBar"), "help-about-symbolic", open(ABOUT_URL));
-    add(_("Quit"), "application-exit-symbolic", () => {
-      this._indicator.menu.close();
-      this.disable();
-    });
   }
 
   _updateUI() {

@@ -8,6 +8,19 @@ is scraped and no browser cookies are handled here.
 Targets GNOME Shell 50. Uses the default theme; `stylesheet.css` only sets
 spacing and fill colours.
 
+## Screenshots
+
+The popup, with OpenCode Go and DeepSeek. Each bar carries a tick at the point
+where usage *should* be by now, so running hot is visible at a glance. A pace
+line appears only when a window is actually over-consumed.
+
+![The popup menu showing provider tabs, usage bars with pace ticks, and the footer actions](media/screenshots/popup.png)
+
+The top-panel indicator tracks the primary provider and fills as that provider
+burns through its worst window. A dot in the tab strip marks which one it is.
+
+![The panel indicator in the GNOME top bar](media/screenshots/panel.png)
+
 ## Install
 
 ```sh
@@ -35,7 +48,7 @@ The popup mirrors the macOS app:
 - A cost summary (today and the last 30 days) for providers `codexbar cost`
   supports: Antigravity, Claude, Codex, Muse Code, and Pi
 - Footer actions: Add Account, Usage Dashboard, Status Page, Refresh Now,
-  Settings, About CodexBar, Quit
+  Settings, About CodexBar
 
 ## Layout
 
