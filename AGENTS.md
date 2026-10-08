@@ -26,6 +26,7 @@ upstream that merging is not practical; treat it as independent.
 | `prefs.js` | Preferences window: refresh interval, pace toggle, primary provider |
 | `stylesheet.css` | Spacing and fill colours only, never backgrounds or fonts |
 | `test/` | Headless suites plus a throwaway dumper extension |
+| `docs/screenshots/` | README images, deliberately outside `media/` so they stay out of the packaged zip |
 
 The split is deliberate: `parse.js`, `cost.js` and `links.js` import no `gi://`
 modules, so they can be unit-tested with a bare `gjs -m` and no shell. Keep it
@@ -65,6 +66,30 @@ These cost real debugging time. All four bit during development.
 - **A `St.BoxLayout` places children side by side, not overlapped.** Putting a
   fill and a pace tick in a box layout pushes the tick past the end of the bar.
   The bar track is a plain `St.Widget` so the tick can overlap at an explicit `x`.
+
+## Packaging gotchas
+
+`gnome-extensions pack` flattens `--extra-source=<file-or-dir>` to the basename
+at the zip root. Passing `--extra-source=media/logos/` produced `logos/` and the
+extension's `media/logos/<id>-symbolic.svg` lookups all 404'd. Pass the parent
+directory instead.
+
+`gnome-extensions install` compiles the schema itself, so the zip should carry
+only the `.gschema.xml` from `--schema=`. Adding
+`--extra-source=schemas/gschemas.compiled` put a stray copy at the zip root,
+where nothing reads it.
+
+Because `--extra-source=media/` sweeps the whole tree, README images live in
+`docs/screenshots/` rather than `media/screenshots/`. Keeping them out of `media/`
+is what stops 150KB of screenshots shipping in every install.
+
+Verify a packaging change rather than trusting it:
+
+```sh
+./build.sh
+rm -rf /tmp/ziptest && mkdir /tmp/ziptest
+cd /tmp/ziptest && unzip -q ~/src/codexbar-gnome/codexbar-gnome/*.zip && ls -R
+```
 
 ## Environment hazards
 

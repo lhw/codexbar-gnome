@@ -18,15 +18,15 @@ provider the panel bar is tracking.
 <table>
   <tr>
     <td align="center" valign="top">
-      <img src="media/screenshots/popup.png" width="300" alt="Popup with OpenCode Go selected: provider tabs with load underlines, three usage bars with pace ticks, and the footer actions"><br>
+      <img src="docs/screenshots/popup.png" width="300" alt="Popup with OpenCode Go selected: provider tabs with load underlines, three usage bars with pace ticks, and the footer actions"><br>
       <sub><b>OpenCode Go</b><br>Three rate windows, all running hot</sub>
     </td>
     <td align="center" valign="top">
-      <img src="media/screenshots/balance.png" width="300" alt="DeepSeek tab showing a balance value rather than a usage bar"><br>
+      <img src="docs/screenshots/balance.png" width="300" alt="DeepSeek tab showing a balance value rather than a usage bar"><br>
       <sub><b>DeepSeek</b><br>A balance has no percentage, so it shows its value</sub>
     </td>
     <td align="center" valign="top">
-      <img src="media/screenshots/codex.png" width="300" alt="Codex tab with the account redacted"><br>
+      <img src="docs/screenshots/codex.png" width="300" alt="Codex tab with the account redacted"><br>
       <sub><b>Codex</b><br>Weekly window, running under pace</sub>
     </td>
   </tr>
@@ -39,6 +39,12 @@ git clone https://github.com/lhw/codexbar-gnome
 cd codexbar-gnome
 ./install.sh
 ```
+
+Or download `codexbar-gnome@lhw.shell-extension.zip` from the
+[releases page](https://github.com/lhw/codexbar-gnome/releases) and install it
+with `gnome-extensions install --force <zip>`. Every CI run also attaches the
+zip to its
+[workflow summary](https://github.com/lhw/codexbar-gnome/actions/workflows/ci.yml).
 
 You need the `codexbar` CLI on `PATH` (`brew install steipete/tap/codexbar`, or
 a Linux build). On Wayland, log out and back in after installing so the shell
