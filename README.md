@@ -10,16 +10,20 @@ spacing and fill colours.
 
 ## Screenshots
 
-The popup, with OpenCode Go and DeepSeek. Each bar carries a tick at the point
-where usage *should* be by now, so running hot is visible at a glance. A pace
-line appears only when a window is actually over-consumed.
+The popup, with OpenCode Go selected. Each bar carries a tick at the point where
+usage *should* be by now, so running hot is visible at a glance. A pace line
+appears only when a window is actually over-consumed, which here is all three.
 
-![The popup menu showing provider tabs, usage bars with pace ticks, and the footer actions](media/screenshots/popup.png)
+![The popup menu: provider tabs with load underlines, three usage bars with pace ticks, and the footer actions](media/screenshots/popup.png)
 
-The top-panel indicator tracks the primary provider and fills as that provider
-burns through its worst window. A dot in the tab strip marks which one it is.
+The tabs are provider logos, so the popup drops the big provider-name header. A
+dot in the strip marks the provider the top-panel indicator is tracking. Balance
+providers such as DeepSeek render their value instead of a misleading empty bar,
+because a balance has no percentage to draw:
 
-![The panel indicator in the GNOME top bar](media/screenshots/panel.png)
+![The DeepSeek tab showing a balance value rather than a usage bar](media/screenshots/balance.png)
+
+![The Codex tab, with the account redacted](media/screenshots/codex.png)
 
 ## Install
 
@@ -102,6 +106,12 @@ The tab strip is provider icons only, each with a load underline, so the
 provider name no longer needs repeating in a header. A dot marks the primary
 provider. Icons come from the CodexBar logo set; providers without a bundled
 logo get a letter tile instead.
+
+New providers need no code: the CLI is the integration point, so enabling one
+there is enough. A provider the extension has never seen still gets a tab, bars,
+a pace tick and a panel reading. Only the display name, logo and dashboard links
+fall back to something generic until they are added to the tables in `parse.js`,
+`links.js` and `media/logos/`.
 
 ## Links
 
