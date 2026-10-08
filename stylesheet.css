@@ -7,12 +7,12 @@
    PANEL_BAR_HEIGHT in extension.js; the properties are set there too so the
    panel button cannot stretch them to the full panel height. */
 .codexbar-panel-track {
-    border-radius: 3px;
+    border-radius: 4px;
     border: 1px solid rgba(255, 255, 255, 0.75);
 }
 
 .codexbar-panel-fill {
-    border-radius: 2px;
+    border-radius: 3px;
 }
 
 /* Provider tab strip. Icons only; the name is in the tooltip and the

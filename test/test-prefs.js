@@ -32,8 +32,14 @@ check("no subprocess launcher used", /Gio\.SubprocessLauncher/.test(src), false)
 check("reads asynchronously", /read_bytes_async/.test(src), true);
 check("uses Gio.Subprocess directly", /Gio\.Subprocess\.new/.test(src), true);
 
+console.log("the list uses the cheap config command, not a live usage fetch");
+check("calls config providers", /"config",\s*"providers"/.test(src), true);
+check("does not call usage", /"usage"/.test(src), false);
+check("keeps only enabled providers", /entry\.enabled !== true/.test(src), true);
+check("uses the display name when given", /names\.get\(id\) \|\| id/.test(src), true);
+
 console.log("the window is built without waiting for the CLI");
-check("fetch is dispatched, not awaited", /fetchProvidersAsync\(\(providerIds\)/.test(src), true);
+check("fetch is dispatched, not awaited", /fetchProvidersAsync\(\(providerIds, names\)/.test(src), true);
 check("no async/await in fillPreferencesWindow", /async fillPreferencesWindow/.test(src), false);
 check("window.add is not behind the fetch", !/await[\s\S]{0,200}window\.add/.test(src), true);
 
@@ -42,8 +48,8 @@ check("starts insensitive", /sensitive:\s*false/.test(src), true);
 check("becomes sensitive after load", /primary\.sensitive = true/.test(src), true);
 check("reports progress", /Reading providers/.test(src), true);
 
-console.log("providers that errored are not offered as tracked");
-check("filters errored entries", /\.filter\(\(entry\) => entry\?\.provider && !entry\.error\)/.test(src), true);
+console.log("only enabled providers are offered as tracked");
+check("skips disabled entries", /entry\.enabled !== true/.test(src), true);
 
 console.log("an unknown stored value stays visible instead of being dropped");
 check("keeps unknown value", /not enabled/.test(src), true);

@@ -30,12 +30,14 @@ const FAINT_TEXT_OPACITY = 150;
 const TAB_ICON_SIZE = 26;
 const TAB_TRACK_WIDTH = TAB_ICON_SIZE;
 
-// Panel indicator. The GNOME top panel is 32px tall with 16px icons; a bar
-// indicator has to sit inside that, so the whole widget including its border
-// stays under the icon height.
-const PANEL_BAR_WIDTH = 16;
-const PANEL_BAR_HEIGHT = 5;
-const PANEL_BAR_INSET = 2; // 1px border plus 0px padding per side.
+// Panel indicator. The GNOME top panel is 32px tall with 16px icons. This bar
+// was first far too tall (it inherited the panel height), then too small to read
+// next to the system icons, so it sits in between: a bit wider than a symbol and
+// about half the panel height, which is where the eye expects a meter.
+const PANEL_BAR_WIDTH = 22;
+const PANEL_BAR_HEIGHT = 9;
+// 1px border per side, no padding.
+const PANEL_BAR_INSET = 2;
 // Popup bar track. The popup sets min-width 320px and the content box pads 12px
 // per side, leaving this. Kept in sync with stylesheet.css.
 const BAR_WIDTH_PX = 296;

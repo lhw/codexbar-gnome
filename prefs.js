@@ -27,28 +27,31 @@ function findCodexBar() {
 }
 
 /**
- * Run `codexbar usage --format json` in the background.
+ * Ask the CLI which providers are enabled, in the background.
  *
- * The CLI takes several seconds because it queries each provider, so it must
- * never run on the main loop: doing so freezes the window before it paints.
+ * Uses `config providers`, not `usage`: the latter queries every provider and
+ * took about four seconds on this machine, which froze the window before it
+ * painted. `config providers` only reads the config file and returns in
+ * milliseconds, which is all this list needs.
  *
- * @param {(ids: string[]) => void} onDone Receives provider ids, empty on failure.
+ * @param {(ids: string[], names: Map<string,string>) => void} onDone
+ *   Receives provider ids and their display names, both empty on failure.
  */
 function fetchProvidersAsync(onDone) {
   const bin = findCodexBar();
   if (!bin) {
-    onDone([]);
+    onDone([], new Map());
     return;
   }
 
   let proc;
   try {
     proc = Gio.Subprocess.new(
-      [bin, "usage", "--format", "json"],
+      [bin, "config", "providers", "--format", "json"],
       Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
     );
   } catch (e) {
-    onDone([]);
+    onDone([], new Map());
     return;
   }
 
@@ -57,19 +60,23 @@ function fetchProvidersAsync(onDone) {
     GLib.PRIORITY_DEFAULT,
     null,
     (stream, result) => {
-      let ids = [];
+      const ids = [];
+      const names = new Map();
       try {
         const [ok, bytes] = stream.read_bytes_finish(result);
         const parsed = ok && bytes.length ? JSON.parse(new TextDecoder().decode(bytes)) : [];
-        // Keep the order the CLI reported, and skip providers that errored: the
-        // panel bar cannot track those.
-        ids = (Array.isArray(parsed) ? parsed : [])
-          .filter((entry) => entry?.provider && !entry.error)
-          .map((entry) => String(entry.provider));
+        for (const entry of Array.isArray(parsed) ? parsed : []) {
+          // Disabled providers cannot be tracked, and default-disabled ones are
+          // simply not configured.
+          if (!entry?.provider || entry.enabled !== true) continue;
+          ids.push(String(entry.provider));
+          if (entry.displayName) names.set(ids[ids.length - 1], String(entry.displayName));
+        }
       } catch (e) {
-        ids = [];
+        onDone([], new Map());
+        return;
       }
-      onDone(ids);
+      onDone(ids, names);
     },
   );
 }
@@ -126,10 +133,10 @@ export default class CodexBarPreferences extends ExtensionPreferences {
     });
     usage.add(primary);
 
-    fetchProvidersAsync((providerIds) => {
+    fetchProvidersAsync((providerIds, names) => {
       providerIds.forEach((id) => {
         ids.push(id);
-        models.append(id);
+        models.append(names.get(id) || id);
       });
 
       if (providerIds.length === 0) {
