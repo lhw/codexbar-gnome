@@ -46,6 +46,8 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 HTTP = urllib.request.build_opener(NoRedirect, urllib.request.HTTPSHandler(context=ssl.create_default_context()))
 FLARE_MAX_TIMEOUT = 60000
 MAX_RESPONSE = 4 * 1024 * 1024
+# JavaScript's max safe integer; the cache feeds the shell.
+_MAX_COUNT = 9007199254740991
 
 
 def validate_flaresolverr_url(value):
@@ -114,29 +116,14 @@ def _readonly_sqlite(path):
         finally:
             conn.close()
         return
-    # Firefox-family browsers can hold an exclusive lock. Preserve the WAL in
-    # a private snapshot rather than opening or modifying their live databases.
+    # Firefox-family browsers can hold an exclusive lock. Copy the database and
+    # its WAL into a private snapshot rather than opening the live files.
     with tempfile.TemporaryDirectory(prefix="codexbar-sqlite-") as temp:
         target = Path(temp) / path.name
-        for _ in range(3):
-            files = [p for p in (path, Path(str(path) + "-wal"), Path(str(path) + "-journal")) if p.is_file()]
-            before = [(p, p.stat().st_size, p.stat().st_mtime_ns) for p in files]
-            for child in Path(temp).iterdir():
-                child.unlink()
-            for original in files:
-                copy = Path(temp) / original.name
-                shutil.copyfile(original, copy)
-                os.chmod(copy, 0o600)
-            try:
-                stable = all((p.stat().st_size, p.stat().st_mtime_ns) == (size, stamp)
-                             for p, size, stamp in before)
-                stable = stable and files == [p for p in (path, Path(str(path) + "-wal"), Path(str(path) + "-journal")) if p.is_file()]
-            except FileNotFoundError:
-                stable = False
-            if stable:
-                break
-        else:
-            raise sqlite3.OperationalError("browser database changed during snapshot")
+        for suffix in ("", "-wal", "-journal"):
+            original = Path(str(path) + suffix)
+            if original.is_file():
+                shutil.copy2(original, target.with_name(original.name))
         snapshot = sqlite3.connect(target)
         try:
             snapshot.execute("PRAGMA query_only=ON")
@@ -326,26 +313,6 @@ def _read_deepseek_session(profile):
     return chromium_local_token(profile)
 
 
-def browser_profiles(provider):
-    adapter = PROVIDERS.get(provider)
-    return adapter.discover_profiles() if adapter else []
-
-
-def session_profiles(provider):
-    adapter = PROVIDERS.get(provider)
-    if adapter is None:
-        return []
-    found = []
-    for label, profile in adapter.discover_profiles():
-        try:
-            if adapter.read_session(profile):
-                found.append((label, profile))
-        except Exception:
-            # One corrupt or ambiguous profile must not hide other local sessions.
-            continue
-    return found
-
-
 def find_sessions(provider, selected=None):
     found = matching_sessions(provider, selected)
     if selected and not found:
@@ -366,7 +333,11 @@ def matching_sessions(provider, selected=None):
     for label, profile in adapter.discover_profiles():
         if selected and selected != label:
             continue
-        session = adapter.read_session(profile)
+        try:
+            session = adapter.read_session(profile)
+        except Exception:
+            # One corrupt or ambiguous profile must not hide other local sessions.
+            continue
         if session:
             found.append((label, profile, session))
     return found
@@ -694,17 +665,19 @@ def safe_label(value):
     return value if 0 < len(value) <= 100 and value.isprintable() else None
 
 
+def _biz(payload):
+    if not isinstance(payload, dict):
+        return None
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return None
+    return data.get("biz_data") if data.get("biz_code", 0) == 0 else None
+
+
 def parse_deepseek(amount, cost, *, now=None, offset=None):
     now = int(now if now is not None else time.time())
     offset = int(offset if offset is not None else time.localtime(now).tm_gmtoff)
-    def biz(payload):
-        if not isinstance(payload, dict):
-            return None
-        data = payload.get("data")
-        if not isinstance(data, dict):
-            return None
-        return data.get("biz_data") if data.get("biz_code", 0) == 0 else None
-    abiz, cbiz = biz(amount), biz(cost)
+    abiz, cbiz = _biz(amount), _biz(cost)
     if not isinstance(abiz, dict) or not isinstance(cbiz, dict):
         raise SessionError("DeepSeek usage response has no biz_data")
     totals = abiz.get("series", [])
@@ -824,14 +797,7 @@ def deepseek(token, now=None):
 
 
 def parse_deepseek_month(amount, cost, now):
-    def biz(p):
-        if not isinstance(p, dict):
-            return None
-        data = p.get("data")
-        if not isinstance(data, dict):
-            return None
-        return data.get("biz_data") if data.get("biz_code", 0) == 0 else None
-    abiz, cbiz = biz(amount), biz(cost)
+    abiz, cbiz = _biz(amount), _biz(cost)
     if not isinstance(abiz, dict) or not isinstance(cbiz, list):
         raise SessionError("DeepSeek monthly response has no biz_data")
     totals = abiz.get("total")
@@ -902,7 +868,7 @@ def _console_count(value):
     if not isinstance(value, str) or len(value) > 16 or not re.fullmatch(r"[0-9]+", value):
         return None
     number = int(value)
-    return number if number <= 9007199254740991 else None
+    return number if number <= _MAX_COUNT else None
 
 
 def normalize_opencode_usage(summary, hours, models, since, now):
@@ -911,7 +877,7 @@ def normalize_opencode_usage(summary, hours, models, since, now):
     values = {key: _console_count(summary.get(key)) for key in fields} if isinstance(summary, dict) else {}
     if len(values) != len(fields) or any(value is None for value in values.values()):
         return None
-    if sum(values[key] for key in fields[1:6]) > 9007199254740991:
+    if sum(values[key] for key in fields[1:6]) > _MAX_COUNT:
         return None
     result = {"summary": values}
     start = since.replace(minute=0, second=0, microsecond=0)
@@ -1075,9 +1041,6 @@ def codex_window(window, label):
     if reset := iso_timestamp(reset):
         result["resetsAt"] = reset
     return result
-
-
-_MAX_COUNT = 9007199254740991
 
 
 def _history_count(value):
@@ -1263,29 +1226,18 @@ def codex(cookies, expected_email=None, flaresolverr_url=None):
     return result
 
 
-def _fetch_deepseek(session, _options):
-    return deepseek(session)
-
-
-def _fetch_opencode(session, _options):
-    return opencode(session)
-
-
-def _fetch_codex(session, options):
-    return codex(session, options.get("codex_email"), options.get("flaresolverr_url"))
-
-
 register_provider(Provider(
     "deepseek", "local-storage", discovery_browsers=("firefox", "chromium"),
     discover_profiles=lambda: _discover_browser_profiles(PROVIDERS["deepseek"]),
     read_session=_read_deepseek_session,
-    fetch=_fetch_deepseek))
+    fetch=lambda session, _options: deepseek(session)))
 register_provider(Provider(
     "opencodego", "cookies", domains=("opencode.ai",),
     cookie_names=("auth", "__Host-auth", "__Host-console_session"),
     request_paths=("/_server", "/console/api/orgs"),
     discover_profiles=lambda: firefox_profiles(),
-    read_session=lambda profile: firefox_cookies(profile, "opencodego"), fetch=_fetch_opencode))
+    read_session=lambda profile: firefox_cookies(profile, "opencodego"),
+    fetch=lambda session, _options: opencode(session)))
 register_provider(Provider(
     "codex", "cookies", domains=("chatgpt.com",),
     cookie_names=("_account", "oai-did", "cf_clearance", "__Secure-next-auth.session-token",
@@ -1294,7 +1246,8 @@ register_provider(Provider(
                  "__Secure-authjs.session-token", "authjs.session-token"),
     request_paths=("/api/auth/session", "/backend-api/wham/usage"),
     discover_profiles=firefox_profiles,
-    read_session=lambda profile: firefox_cookies(profile, "codex"), fetch=_fetch_codex,
+    read_session=lambda profile: firefox_cookies(profile, "codex"),
+    fetch=lambda session, options: codex(session, options.get("codex_email"), options.get("flaresolverr_url")),
     normalize_cookies=codex_cookie_header))
 
 
@@ -1375,7 +1328,7 @@ def main():
               file=sys.stderr)
         grouped = {}
         for provider in PROVIDERS:
-            for label, _ in session_profiles(provider):
+            for label, _, _ in matching_sessions(provider):
                 if (not isinstance(label, str) or not 0 < len(label) <= 500 or
                         any(ord(char) < 32 or 127 <= ord(char) <= 159 for char in label)):
                     continue

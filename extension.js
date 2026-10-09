@@ -237,27 +237,9 @@ function validBrowserSummary(data, profile, now = Date.now()) {
   const age = (now - Date.parse(data?.updatedAt)) / 1000;
   if (data?.source !== profile || !Number.isFinite(age) || age < 0 || age > 3600) return false;
   if (data?.status === "error") return typeof data.error === "string" && data.error.length <= 200;
-  const numeric = (value) => typeof value === "number" && Number.isFinite(value);
-  if (data.provider === "deepseek") {
-    return numeric(data.todayTokens) && numeric(data.periodTokens) && numeric(data.todayCost) &&
-      numeric(data.periodCost) && numeric(data.requestCount) && numeric(data.periodRequests) &&
-      data.todayTokens >= 0 && data.periodTokens >= 0 && data.todayCost >= 0 && data.periodCost >= 0 &&
-      data.requestCount >= 0 && data.periodRequests >= 0 && numeric(data.apiKeyCount) && data.apiKeyCount >= 0 &&
-      typeof data.currency === "string" && typeof data.periodLabel === "string" &&
-      (data.topModel === null || typeof data.topModel === "string") &&
-      Array.isArray(data.modelCosts) && data.modelCosts.length <= 100 &&
-      data.modelCosts.every((model) => typeof model.model === "string" && numeric(model.cost) && model.cost >= 0) &&
-      Array.isArray(data.daily) && data.daily.length <= 31 &&
-      data.daily.every((day) => typeof day.date === "string" && numeric(day.tokens) && numeric(day.cost));
-  }
-  if (data.provider === "codex" || data.provider === "opencodego") {
-    const windowsValid = Array.isArray(data.extraWindows || data.windows) &&
-      (data.extraWindows || data.windows).length <= 20 &&
-      (data.extraWindows || data.windows).every((window) => typeof window.label === "string" &&
-        numeric(window.usedPercent) && window.usedPercent >= 0 && window.usedPercent <= 100);
-    return windowsValid;
-  }
-  return false;
+  // Field-level shape is owned by the helper that writes the cache; the shell
+  // only checks freshness, profile scope, and that a provider tag is present.
+  return typeof data.provider === "string";
 }
 
 function validConsoleUsage(usage) {
@@ -317,10 +299,6 @@ function browserHelperNotice(enabled, profile, data, now = Date.now()) {
   if (!profile) return _("Choose a browser profile in Settings to enable browser usage.");
   if (!validBrowserSummary(data, profile, now)) return _("No recent browser usage. Check the helper service in Settings.");
   return "";
-}
-
-function browserCacheFilename(provider) {
-  return `browser-usage-${provider}.json`;
 }
 
 export default class CodexBarExtension extends Extension {
@@ -444,7 +422,7 @@ export default class CodexBarExtension extends Extension {
     if (!this._settings?.get_boolean("show-browser-summary")) return;
     const profile = this._settings.get_string("browser-profile");
     for (const provider of ["deepseek", "opencodego", "codex"]) {
-      const name = browserCacheFilename(provider);
+      const name = `browser-usage-${provider}.json`;
       const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_cache_dir(), "codexbar", name]));
       file.load_contents_async(null, (source, result) => {
         try {

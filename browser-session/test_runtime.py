@@ -1,9 +1,6 @@
 import unittest
 from unittest.mock import patch
 import subprocess
-import sys
-from contextlib import redirect_stdout
-from io import StringIO
 
 import runtime
 
@@ -45,13 +42,6 @@ class RuntimeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             runtime.service_text("/bad\npath/uv", "/safe/path")
 
-    def test_service_text_cli_resolves_uv_without_side_effects(self):
-        output = StringIO()
-        with patch.object(sys, "argv", ["runtime.py", "--service-text"]), \
-                patch.object(runtime.shutil, "which", return_value="/test/bin/uv"), \
-                redirect_stdout(output):
-            self.assertEqual(runtime.main(), 0)
-        self.assertIn('ExecStart="/test/bin/uv"', output.getvalue())
 
 
 if __name__ == "__main__":

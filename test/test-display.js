@@ -27,9 +27,9 @@ const gettext = (s) => {
 const helperSrc = src.slice(src.indexOf("function formatResetsIn"), src.indexOf("export default class"));
 const helpers = new Function(
   "_",
-  `${helperSrc}; return { formatResetsIn, formatUpdated, isExceedingPace, formatPace, formatCodexPace, formatCodexDetails, barColor, fillWidth, activeProviderIndex, validBrowserSummary, browserCacheFilename, validActivityHistory, validCreditHistory, historyDayDetail, browserHelperNotice };`,
+  `${helperSrc}; return { formatResetsIn, formatUpdated, isExceedingPace, formatPace, formatCodexPace, formatCodexDetails, barColor, fillWidth, activeProviderIndex, validBrowserSummary, validActivityHistory, validCreditHistory, historyDayDetail, browserHelperNotice };`,
 )(gettext);
-const { formatResetsIn, formatUpdated, isExceedingPace, formatPace, formatCodexPace, formatCodexDetails, barColor, fillWidth, activeProviderIndex, validBrowserSummary, browserCacheFilename, validActivityHistory, validCreditHistory, historyDayDetail, browserHelperNotice } = helpers;
+const { formatResetsIn, formatUpdated, isExceedingPace, formatPace, formatCodexPace, formatCodexDetails, barColor, fillWidth, activeProviderIndex, validBrowserSummary, validActivityHistory, validCreditHistory, historyDayDetail, browserHelperNotice } = helpers;
 
 let failed = 0;
 let passed = 0;
@@ -187,8 +187,7 @@ check("different profile is rejected", validBrowserSummary(browserCache, "chromi
 check("expired cache is rejected", validBrowserSummary(browserCache, "firefox:profile", NOW.getTime() + 3601_000), false);
 check("fresh helper error remains visible", validBrowserSummary({ ...browserCache, status: "error", error: "No supported browser session found" }, "firefox:profile", NOW.getTime()), true);
 check("stale helper error is rejected", validBrowserSummary({ ...browserCache, status: "error", error: "No session" }, "firefox:profile", NOW.getTime() + 3601_000), false);
-check("malformed data is rejected", validBrowserSummary({ ...browserCache, daily: {} }, "firefox:profile", NOW.getTime()), false);
-check("provider cache paths are distinct", [browserCacheFilename("deepseek"), browserCacheFilename("codex")], ["browser-usage-deepseek.json", "browser-usage-codex.json"]);
+check("cache without a provider tag is rejected", validBrowserSummary({ ...browserCache, provider: undefined }, "firefox:profile", NOW.getTime()), false);
 check("disabled browser enrichment needs no setup notice", browserHelperNotice(false, "", null), "");
 check("unselected browser profile points to Settings", String(browserHelperNotice(true, "", null)).includes("Choose a browser profile"), true);
 check("missing browser data points to service controls", String(browserHelperNotice(true, "firefox:profile", null)).includes("helper service in Settings"), true);

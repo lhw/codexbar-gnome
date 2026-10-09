@@ -1,7 +1,6 @@
 """Read the extension's opt-in settings without depending on PyGObject."""
 import ast
 from pathlib import Path
-import shutil
 import subprocess
 
 SCHEMA = "org.gnome.shell.extensions.codexbar"
@@ -76,21 +75,3 @@ KillSignal=SIGTERM
 WantedBy=default.target
 """.format(directory=safe_path(directory), exec_directory=command_arg(directory), uv=command_arg(uv))
 
-
-def main():
-    import argparse
-
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--service-text", action="store_true")
-    args = parser.parse_args()
-    if args.service_text:
-        uv = shutil.which("uv")
-        if not uv:
-            raise SystemExit("uv is required")
-        print(service_text(str(Path(uv).resolve()), str(Path(__file__).resolve().parent)), end="")
-        return 0
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

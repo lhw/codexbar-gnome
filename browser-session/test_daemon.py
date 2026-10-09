@@ -714,7 +714,6 @@ class DaemonTests(unittest.TestCase):
                                    fetch=lambda session, _options: {"provider": "test-provider", "seen": session})
         daemon.register_provider(provider)
         try:
-            self.assertEqual(daemon.browser_profiles("test-provider"), [("fake:profile", profile)])
             self.assertEqual(daemon.find_sessions("test-provider")[2], "opaque-test-session")
             with tempfile.TemporaryDirectory() as temp, patch.object(daemon, "CACHE_DIR", Path(temp)):
                 daemon.refresh("test-provider", None)
@@ -741,7 +740,7 @@ class DaemonTests(unittest.TestCase):
         daemon.register_provider(provider)
         try:
             with patch.object(sys, "argv", ["daemon.py", "--list-profiles"]), \
-                 patch.object(daemon, "session_profiles", side_effect=AssertionError("scanned before consent")):
+                 patch.object(daemon, "matching_sessions", side_effect=AssertionError("scanned before consent")):
                 with self.assertRaises(SystemExit):
                     daemon.main()
             output, errors = io.StringIO(), io.StringIO()

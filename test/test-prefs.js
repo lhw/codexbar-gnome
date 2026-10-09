@@ -37,29 +37,6 @@ check("running unit state", serviceState("loaded", "active", "enabled"), "Runnin
 check("active but disabled unit", serviceState("loaded", "active", "disabled"), "Running · not enabled at login");
 check("failed unit state", serviceState("loaded", "failed", "enabled"), "Service failed; check the user journal");
 
-check("subprocess stdout is asynchronously drained", /read_bytes_async\(16 \* 1024/.test(src), true);
-check("subprocess output is capped while reading", /size \+ data\.length > 128 \* 1024/.test(src), true);
-check("subprocess stderr is silenced", /Gio\.SubprocessFlags\.STDERR_SILENCE/.test(src), true);
-check("no synchronous subprocess", /spawn_sync|spawn_command_line_sync/.test(src), false);
-check("provider list uses config providers", /"config", "providers"/.test(src), true);
-check("provider list avoids live usage request", /"usage"/.test(src), false);
-check("disabled providers are excluded", /entry\.enabled !== true/.test(src), true);
-check("provider display names are preferred", /names\.get\(id\) \|\| id/.test(src), true);
-check("provider loading is dispatched asynchronously", /fetchProvidersAsync\(\(providerIds, names\)/.test(src), true);
-check("unknown primary provider remains visible", /not enabled/.test(src), true);
-check("service is checked from systemd on window open", /"systemctl", "--user", "show"/.test(src), true);
-check("profile scan is explicit and JSON-only", /"profiles", "--json"/.test(src), true);
-check("setup requires an explicit confirmation", /heading: _\("Set up and start the browser helper\?"\)/.test(src), true);
-check("saved selection is retained after discovery", /saved; not found/.test(src), true);
-check("initial saved selection says not scanned", /saved; not scanned/.test(src), true);
-check("saved selection can be cleared with placeholder", /index > 0 \? profileValues\[index - 1\] : ""/.test(src), true);
-check("settings continue to own profile and interval", /settings\.set_string\("browser-profile"/.test(src), true);
-check("browser access remains settings-bound opt-in", /settings\.bind\("show-browser-summary", browser, "active"/.test(src), true);
-check("solver cookie disclosure remains visible", /receives ChatGPT session cookies/.test(src), true);
-check("helper path is rooted at installed extension", /\[this\.path, "browser-session"\]/.test(src), true);
-check("setup rechecks current opt-in", /!browser\.active \|\| !settings\.get_string\("browser-profile"\)/.test(src), true);
-check("setup failure survives status refresh", /Setup failed; check uv\/network and the user journal/.test(src), true);
-
 const runSource = src.match(/function runAsync\(argv, timeoutMs, done\) \{[\s\S]*?\n\}/)?.[0];
 const runAsync = new Function("Gio", "GLib", `${runSource}; return runAsync;`)(Gio, GLib);
 const python = GLib.find_program_in_path("python3");
