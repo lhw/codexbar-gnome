@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/lhw/codexbar-gnome/compare/v1.1.1...v1.2.0) (2026-10-09)
+
+
+### Features
+
+* add settings-driven browser session usage helper ([ed50044](https://github.com/lhw/codexbar-gnome/commit/ed500441ee587a3d1ef6c6318f59f37a7410e80f))
+
+
+### Bug Fixes
+
+* render healthy providers when another provider errors ([895338c](https://github.com/lhw/codexbar-gnome/commit/895338c07499ac476ec5a9e01decee9174da212b))
+* surface browser session failures and stabilize usage details ([67c70e8](https://github.com/lhw/codexbar-gnome/commit/67c70e8f3091434f6f3ac4f3f2dfbae67f5390d2))
+
 ## [1.1.1](https://github.com/lhw/codexbar-gnome/compare/v1.1.0...v1.1.1) (2026-10-08)
 
 
