@@ -33,9 +33,10 @@ def cache_path(provider):
 
 
 class SessionError(Exception):
-    def __init__(self, message, status=None):
+    def __init__(self, message, status=None, *, code=None):
         super().__init__(message)
         self.status = status
+        self.error_code = code
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -316,7 +317,7 @@ def _read_deepseek_session(profile):
 def find_sessions(provider, selected=None):
     found = matching_sessions(provider, selected)
     if selected and not found:
-        raise SessionError("selected browser profile has no matching provider session")
+        raise SessionError("selected browser profile has no matching provider session", code="session-missing")
     if len(found) != 1:
         if found:
             raise SessionError("multiple matching profiles; choose one in Preferences (available: " +
@@ -451,12 +452,14 @@ def request_json(url, token_or_cookies, *, platform=False, headers=None, query=N
             return json.loads(raw)
     except urllib.error.HTTPError as exc:
         if exc.code == 403 and exc.headers and exc.headers.get("cf-mitigated", "").lower() == "challenge":
-            raise SessionError("Cloudflare challenge", status=403) from None
-        if exc.code in (401, 403):
-            raise SessionError("browser session expired or rejected", status=exc.code) from None
+            raise SessionError("Cloudflare challenge", status=403, code="cloudflare-challenge") from None
+        if exc.code == 401:
+            raise SessionError("browser session expired or rejected", status=401, code="session-invalid") from None
+        if exc.code == 403:
+            raise SessionError("provider access denied", status=403, code="access-denied") from None
         raise SessionError(f"HTTP {exc.code}", status=exc.code) from None
     except urllib.error.URLError as exc:
-        raise SessionError("network request failed") from None
+        raise SessionError("network request failed", code="network-error") from None
 
 
 def flaresolverr_json(base_url, url, cookies):
@@ -529,8 +532,12 @@ def opencode_server_text(cookies, server_id, *, args=None, referer="https://open
                 raise SessionError("OpenCode response exceeds 4 MiB safety limit")
             return raw.decode("utf-8", "strict")
     except urllib.error.HTTPError as exc:
-        if exc.code in (401, 403):
-            raise SessionError("browser session expired or rejected") from None
+        if exc.code == 403 and exc.headers and exc.headers.get("cf-mitigated", "").lower() == "challenge":
+            raise SessionError("Cloudflare challenge", status=403, code="cloudflare-challenge") from None
+        if exc.code == 401:
+            raise SessionError("browser session expired or rejected", status=401, code="session-invalid") from None
+        if exc.code == 403:
+            raise SessionError("provider access denied", status=403, code="access-denied") from None
         raise SessionError(f"HTTP {exc.code}") from None
     except (urllib.error.URLError, UnicodeError):
         raise SessionError("OpenCode legacy request failed") from None
@@ -621,7 +628,7 @@ def deepseek_call(token, endpoint, query):
     codes = (body.get("code"), data.get("biz_code"))
     if any(code not in (0, None) for code in codes):
         if any(code in (40002, 40003) for code in codes):
-            raise SessionError("browser session expired or rejected")
+            raise SessionError("browser session expired or rejected", code="session-invalid")
         raise SessionError("DeepSeek rejected usage request")
     business = data.get("biz_data")
     if business is None or (endpoint.endswith("/amount") and not isinstance(business, dict)) or (
@@ -783,7 +790,7 @@ def deepseek(token, now=None):
         cost = deepseek_call(token, "usage/by_api_key/cost", query)
         return parse_deepseek(amount, cost, now=now, offset=offset)
     except SessionError as by_key_error:
-        if by_key_error.status in (401, 403) or "expired or rejected" in str(by_key_error):
+        if by_key_error.status in (401, 403) or by_key_error.error_code in {"session-invalid", "access-denied", "cloudflare-challenge"}:
             raise
         # Upstream CodexBar falls back to monthly amount/cost when by-key series fail.
         month = dt.datetime.fromtimestamp(now).astimezone()
@@ -1143,7 +1150,7 @@ def codex(cookies, expected_email=None, flaresolverr_url=None):
             raise
         if (not isinstance(session, dict) or not isinstance(session.get("accessToken"), str) or
                 not session["accessToken"] or any(ord(char) < 33 or ord(char) == 127 for char in session["accessToken"])):
-            raise SessionError("Codex browser session has no bearer authorization")
+            raise SessionError("Codex browser session has no bearer authorization", code="session-invalid")
         email = find_email(session)
         if expected_email and (not email or email.casefold() != expected_email.strip().casefold()):
             raise SessionError("Codex browser session email does not match the selected Codex account")
@@ -1153,7 +1160,7 @@ def codex(cookies, expected_email=None, flaresolverr_url=None):
             auth_headers = {"Cookie": cookie_header(cookies), "User-Agent": user_agent}
         except SessionError as retry:
             if flaresolverr_url and retry.status == 403 and str(retry) == "Cloudflare challenge":
-                raise SessionError("Cloudflare still blocks the API after FlareSolverr; clearance may be tied to the solver's network or browser") from None
+                raise SessionError("Cloudflare still blocks the API after FlareSolverr; clearance may be tied to the solver's network or browser", code="cloudflare-challenge") from None
             raise
     if session is None:
         try:
@@ -1287,13 +1294,18 @@ def refresh_provider(provider, selected, codex_email=None, flaresolverr_url=None
     except Exception as exc:
         message = str(exc) if isinstance(exc, SessionError) else "unsupported response or local read failure"
         try:
-            publish({"provider": provider, "status": "error", "error": message,
-                     "source": selected, "updatedAt": dt.datetime.now(dt.timezone.utc).isoformat()})
+            data = {"provider": provider, "status": "error", "error": message,
+                    "source": selected, "updatedAt": dt.datetime.now(dt.timezone.utc).isoformat()}
+            code = exc.error_code if isinstance(exc, SessionError) else None
+            if isinstance(code, str) and code in {"session-invalid", "session-missing", "access-denied", "cloudflare-challenge", "network-error"}:
+                data["errorCode"] = code
+            publish(data)
         except OSError:
             print(f"{provider} cache write failed", flush=True)
             return False
         print(f"{provider} refresh failed: {message}", flush=True)
         return False
+    print(f"{provider} refresh completed", flush=True)
     return True
 
 
@@ -1376,6 +1388,8 @@ def main():
                 if args.once:
                     print("browser-session is disabled or has no selected profile", file=sys.stderr)
                     return 1
+                if current != previous:
+                    print("browser-session paused: access disabled or no selected profile", flush=True)
                 previous = current
                 time.sleep(60)
                 continue

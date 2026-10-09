@@ -38,6 +38,7 @@ gnome-extensions pack \
     --extra-source=cli.js \
     --extra-source=parse.js \
     --extra-source=cost.js \
+    --extra-source=browser-status.js \
     --extra-source=links.js \
     --extra-source="$STAGING/browser-session/" \
     --extra-source=stylesheet.css \

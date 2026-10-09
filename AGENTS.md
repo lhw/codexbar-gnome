@@ -29,6 +29,7 @@ upstream that merging is not practical; treat it as independent.
 | `browser-session/daemon.py` | Optional helper: browser readers, provider adapters/registry, sanitized caches, polling |
 | `browser-session/runtime.py` | Shared GSettings configuration and user-service unit generation |
 | `browser-session/helper.py` | Explicit helper setup, foreground runs, and opt-in user-service management |
+| `browser-status.js` | Shared sanitized session-error validation and recovery copy for popup and Preferences |
 | `docs/screenshots/` | README images, deliberately outside `media/` so they stay out of the packaged zip |
 
 The split is deliberate: `parse.js`, `cost.js` and `links.js` import no `gi://`

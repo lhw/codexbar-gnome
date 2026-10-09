@@ -1,5 +1,6 @@
 """Read the extension's opt-in settings without depending on PyGObject."""
 import ast
+import os
 from pathlib import Path
 import subprocess
 
@@ -11,8 +12,9 @@ def _get(key):
     if not (SCHEMA_DIR / "gschemas.compiled").is_file():
         raise RuntimeError("CodexBar settings schema is not compiled; run helper.py setup")
     try:
+        gsettings = "/usr/bin/gsettings" if os.access("/usr/bin/gsettings", os.X_OK) else "gsettings"
         result = subprocess.run(
-            ["gsettings", "--schemadir", str(SCHEMA_DIR), "get", SCHEMA, key],
+            [gsettings, "--schemadir", str(SCHEMA_DIR), "get", SCHEMA, key],
             capture_output=True, text=True, timeout=5, check=True,
         )
         value = result.stdout.strip()
@@ -70,8 +72,9 @@ Restart=on-failure
 RestartSec=30
 TimeoutStopSec=15
 KillSignal=SIGTERM
+# uv exits 143 when it forwards systemd's SIGTERM to its child.
+SuccessExitStatus=143
 
 [Install]
 WantedBy=default.target
 """.format(directory=safe_path(directory), exec_directory=command_arg(directory), uv=command_arg(uv))
-

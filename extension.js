@@ -9,6 +9,7 @@ import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 import St from "gi://St";
 import Clutter from "gi://Clutter";
+import Pango from "gi://Pango";
 
 import { Extension, gettext as _ } from "resource:///org/gnome/shell/extensions/extension.js";
 import * as PanelMenu from "resource:///org/gnome/shell/ui/panelMenu.js";
@@ -19,6 +20,7 @@ import * as PopupMenu from "resource:///org/gnome/shell/ui/popupMenu.js";
 import { fetchCost, fetchUsage, findCodexBar } from "./cli.js";
 import { parseUsagePayload } from "./parse.js";
 import { formatMoney, formatTokens, parseCostPayload } from "./cost.js";
+import { browserSessionMessage, validBrowserSessionError } from "./browser-status.js";
 import {
   ADD_ACCOUNT_URL,
   CLI_REPO_URL,
@@ -161,7 +163,8 @@ function formatPace(pace, usedPercent) {
 }
 
 function formatCodexPace(pace) {
-  return pace?.summary ? _("Pace: %s").format(pace.summary) : "";
+  const summary = typeof pace?.summary === "string" ? pace.summary.split("|")[0].trim() : "";
+  return summary ? _("Pace: %s").format(summary) : "";
 }
 
 function formatCodexDetails(provider) {
@@ -236,7 +239,7 @@ function activeProviderIndex(providers, currentIndex) {
 function validBrowserSummary(data, profile, now = Date.now()) {
   const age = (now - Date.parse(data?.updatedAt)) / 1000;
   if (data?.source !== profile || !Number.isFinite(age) || age < 0 || age > 3600) return false;
-  if (data?.status === "error") return typeof data.error === "string" && data.error.length <= 200;
+  if (data?.status === "error") return validBrowserSessionError(data, profile, data.provider, now);
   // Field-level shape is owned by the helper that writes the cache; the shell
   // only checks freshness, profile scope, and that a provider tag is present.
   return typeof data.provider === "string";
@@ -801,7 +804,9 @@ export default class CodexBarExtension extends Extension {
       }
     }
     if (browserSummary?.status === "error") {
-      this._contentBox.add_child(dimLabel({ text: _("Browser helper: %s").format(browserSummary.error) }));
+      const label = dimLabel({ text: browserSessionMessage(browserSummary, _), width: BAR_WIDTH_PX });
+      label.clutter_text.line_wrap = true;
+      this._contentBox.add_child(label);
     }
     if (provider.id === "deepseek" && browserSummary?.status !== "error" && browserSummary?.provider === "deepseek") {
       this._contentBox.add_child(this._buildBrowserSummary(browserSummary));
@@ -982,8 +987,8 @@ export default class CodexBarExtension extends Extension {
     }
     box.add_child(row);
 
-    // Other providers only warn when over-consumed; Codex's CLI summary also
-    // gives a useful run-out estimate while on pace.
+    // Other providers only warn when over-consumed; Codex's compact summary
+    // also reports its pace while on track.
     const codexPace = isCodex ? formatCodexPace(window.pace) : "";
     if (this._settings.get_boolean("show-pace") && (codexPace || isExceedingPace(window))) {
       const pace = codexPace || formatPace(window.pace, window.usedPercent);
@@ -1118,24 +1123,34 @@ export default class CodexBarExtension extends Extension {
   }
 
   _addChartToMenu(menu, days, field, format, labelField = "date") {
-    const detail = dimLabel({ text: labelField === "model" ? _("Hover or focus a model for details") : _("Hover or focus a bar for details"),
-      width: BAR_WIDTH_PX, x_expand: true, style_class: "codexbar-history-detail" });
-    detail.clutter_text.line_wrap = true;
+    const detail = new St.BoxLayout({ vertical: true, width: BAR_WIDTH_PX, x_expand: true, style_class: "codexbar-history-detail" });
+    const primaryDetail = dimLabel({ text: labelField === "model" ? _("Hover or focus a model for details") : _("Hover or focus a bar for details"), x_expand: true });
+    primaryDetail.clutter_text.line_wrap = false;
+    primaryDetail.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+    const secondaryDetail = dimLabel({ text: "\u00a0", x_expand: true });
+    secondaryDetail.clutter_text.line_wrap = false;
+    secondaryDetail.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+    detail.add_child(primaryDetail);
+    detail.add_child(secondaryDetail);
     menu.box.add_child(detail);
     const maximum = Math.max(0, ...days.map((day) => day[field]));
     const row = new St.BoxLayout({ width: BAR_WIDTH_PX, x_expand: true, y_align: Clutter.ActorAlign.END, style_class: "codexbar-history-chart" });
     row.layout_manager.homogeneous = true;
     days.forEach((day) => {
       const description = labelField === "model" ? _("%s · %s").format(day.model, format(day[field])) : historyDayDetail(day.date, day[field], format);
+      const supplemental = [
+        ...(field !== "tokens" && day.tokens > 0 ? [_('%s tokens').format(formatTokens(day.tokens))] : []),
+        ...(day.requests > 0 ? [_('%s requests').format(formatTokens(day.requests))] : []),
+      ].join(" · ");
+      const accessibleDescription = [description, supplemental].filter(Boolean).join(" · ");
       const button = new St.Button({ can_focus: true, x_expand: true, style_class: "codexbar-history-day",
-        accessible_name: description });
+        accessible_name: accessibleDescription });
       button.set_child(new St.Widget({ style_class: "codexbar-history-bar",
         x_expand: true, x_align: Clutter.ActorAlign.FILL,
         height: maximum ? Math.max(2, Math.round(48 * day[field] / maximum)) : 2, y_align: Clutter.ActorAlign.END }));
       const show = () => {
-        detail.text = description;
-        if (field !== "tokens" && day.tokens > 0) detail.text += _(" · %s tokens").format(formatTokens(day.tokens));
-        if (day.requests > 0) detail.text += _(" · %s requests").format(formatTokens(day.requests));
+        primaryDetail.text = description;
+        secondaryDetail.text = supplemental || "\u00a0";
       };
       button.connect("clicked", show);
       button.connect("enter-event", show);

@@ -1,6 +1,7 @@
 // Pure preference helpers and UI wiring, without opening a Shell preferences window.
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
+import { validBrowserSessionError, browserSessionMessage } from "../browser-status.js";
 
 const src = new TextDecoder().decode(
   GLib.file_get_contents(GLib.build_filenamev([GLib.get_current_dir(), "prefs.js"]))[1],
@@ -29,6 +30,16 @@ check("malformed JSON is empty", parseBrowserProfiles("not json"), []);
 check("deduplicates profile labels", parseBrowserProfiles(JSON.stringify({ profiles: [
   { label: "Firefox", providers: ["codex"] }, { label: "Firefox", providers: ["deepseek"] },
 ]})), [{ label: "Firefox", providers: ["codex"] }]);
+
+const sessionError = {
+  status: "error", source: "Firefox", provider: "codex", error: "expired",
+  errorCode: "session-invalid", updatedAt: new Date().toISOString(),
+};
+check("accepts a fresh matching session error", validBrowserSessionError(sessionError, "Firefox", "codex"), true);
+check("rejects a stale session error", validBrowserSessionError({ ...sessionError, updatedAt: new Date(Date.now() - 3601_000).toISOString() }, "Firefox", "codex"), false);
+check("rejects an error from another profile", validBrowserSessionError(sessionError, "Chrome", "codex"), false);
+check("rejects unknown error codes", validBrowserSessionError({ ...sessionError, errorCode: "secret" }, "Firefox", "codex"), false);
+check("formats session-invalid recovery copy", browserSessionMessage(sessionError), "Browser session expired or invalid. Sign in again in the selected browser profile; usage retries automatically.");
 
 const stateSource = src.match(/function browserServiceState\(load, active, unitFile\) \{[\s\S]*?\n\}/)?.[0];
 const serviceState = new Function("_", `${stateSource}; return browserServiceState;`)((text) => text);

@@ -27,6 +27,15 @@ class RuntimeTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Unable to read"):
                 runtime._get("show-browser-summary")
 
+    def test_prefers_native_gsettings_and_falls_back_when_unavailable(self):
+        result = subprocess.CompletedProcess([], 0, stdout="true\n", stderr="")
+        for available, expected in ((True, "/usr/bin/gsettings"), (False, "gsettings")):
+            with self.subTest(available=available), \
+                    patch.object(runtime.os, "access", return_value=available), \
+                    patch.object(runtime.subprocess, "run", return_value=result) as run:
+                runtime._get("show-browser-summary")
+                self.assertEqual(run.call_args.args[0][0], expected)
+
     def test_bad_settings_rejected(self):
         for values in (["yes"], [True, "x\n", 15, "", ""], [True, "x", 0, "", ""]):
             with self.subTest(values=values), patch.object(runtime, "_get", side_effect=values):
@@ -39,6 +48,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertIn('ExecStart="/home/test/$$bin/uv"', text)
         self.assertIn('--directory "/home/test/a b%%folder" python helper.py start', text)
         self.assertIn("WantedBy=default.target", text)
+        self.assertIn("SuccessExitStatus=143", text)
         with self.assertRaises(ValueError):
             runtime.service_text("/bad\npath/uv", "/safe/path")
 

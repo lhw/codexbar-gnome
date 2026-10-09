@@ -195,6 +195,14 @@ access off pauses new refreshes; a request already in flight can finish. Changin
 the profile triggers a fresh poll and the popup rejects the old profile's cache.
 Errors from one provider do not hide healthy providers or existing CLI usage.
 
+If a provider rejects the browser session, the popup and Preferences show
+**Browser session expired or invalid**, with instructions to sign in again in
+the selected browser profile. The helper retries automatically; the warning
+clears after a successful refresh. Preferences checks these cached session errors
+every 30 seconds while open, independently of the service's **Running** status.
+Missing local sessions, access denials, Cloudflare challenges, and connection
+failures have separate messages; they are not all treated as expired credentials.
+
 ### Optional login service
 
 For automatic startup, explicitly install and enable the systemd **user** service:

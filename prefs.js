@@ -2,6 +2,7 @@ import Adw from "gi://Adw";
 import Gtk from "gi://Gtk";
 import Gio from "gi://Gio";
 import GLib from "gi://GLib";
+import { browserSessionMessage, validBrowserSessionError } from "./browser-status.js";
 
 import {
   ExtensionPreferences,
@@ -216,7 +217,12 @@ export default class CodexBarPreferences extends ExtensionPreferences {
   fillPreferencesWindow(window) {
     const settings = this.getSettings();
     let closed = false;
-    window.connect("close-request", () => { closed = true; return false; });
+    let sessionStatusTimer = 0;
+    window.connect("close-request", () => {
+      closed = true;
+      if (sessionStatusTimer) GLib.Source.remove(sessionStatusTimer);
+      return false;
+    });
 
     const page = new Adw.PreferencesPage({
       title: _("CodexBar"),
@@ -248,6 +254,40 @@ export default class CodexBarPreferences extends ExtensionPreferences {
     const browserGroup = new Adw.PreferencesGroup({
       title: _("Optional browser helper"),
       description: _("The optional user service reads matching browser credentials and uses unofficial provider APIs."),
+    });
+    const sessionStatusRows = new Map(["codex", "deepseek", "opencodego"].map((id) => {
+      const names = { codex: "Codex", deepseek: "DeepSeek", opencodego: "OpenCode Go" };
+      const row = new Adw.ActionRow({ title: `${names[id]} ${_("browser session")}`, subtitle_lines: 4, visible: false });
+      browserGroup.add(row);
+      return [id, row];
+    }));
+    let sessionStatusGeneration = 0;
+    const refreshSessionErrors = () => {
+      const generation = ++sessionStatusGeneration;
+      const profile = settings.get_string("browser-profile");
+      for (const row of sessionStatusRows.values()) row.visible = false;
+      if (closed || !browser.active || !profile) return;
+      for (const [provider, row] of sessionStatusRows) {
+        const file = Gio.File.new_for_path(GLib.build_filenamev([
+          GLib.get_user_cache_dir(), "codexbar", `browser-usage-${provider}.json`,
+        ]));
+        file.load_contents_async(null, (source, result) => {
+          if (closed || generation !== sessionStatusGeneration || !browser.active ||
+              settings.get_string("browser-profile") !== profile) return;
+          try {
+            const bytes = source.load_contents_finish(result)[1];
+            if (bytes.length > 128 * 1024) return;
+            const data = JSON.parse(new TextDecoder().decode(bytes));
+            if (!validBrowserSessionError(data, profile, provider)) return;
+            row.subtitle = browserSessionMessage(data, _);
+            row.visible = true;
+          } catch (e) { }
+        });
+      }
+    };
+    sessionStatusTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 30, () => {
+      refreshSessionErrors();
+      return closed ? GLib.SOURCE_REMOVE : GLib.SOURCE_CONTINUE;
     });
     const browser = new Adw.SwitchRow({
       title: _("Allow browser-session access and show usage"),
@@ -332,6 +372,7 @@ export default class CodexBarPreferences extends ExtensionPreferences {
       if (updatingProfile) return;
       const index = browserProfile.selected;
       settings.set_string("browser-profile", index > 0 ? profileValues[index - 1] : "");
+      refreshSessionErrors();
       updateServiceButtons();
     });
 
@@ -396,8 +437,10 @@ export default class CodexBarPreferences extends ExtensionPreferences {
       serviceBusy = true;
       updateServiceButtons();
       refreshServiceStatus();
+      refreshSessionErrors();
     });
     browser.connect("notify::active", updateServiceButtons);
+    browser.connect("notify::active", refreshSessionErrors);
     startService.connect("clicked", () => {
       const dialog = new Adw.MessageDialog({
         heading: _("Set up and start the browser helper?"),
@@ -440,6 +483,7 @@ export default class CodexBarPreferences extends ExtensionPreferences {
     serviceBusy = true;
     updateServiceButtons();
     refreshServiceStatus();
+    refreshSessionErrors();
     updateServiceButtons();
 
     // The panel bar tracks one provider. The list comes from the CLI, which is

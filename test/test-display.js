@@ -5,6 +5,7 @@
 // pure helpers and the sizing math, which keeps the whole thing runnable with a
 // bare `gjs -m`.
 import GLib from "gi://GLib";
+import { browserSessionMessage, validBrowserSessionError } from "../browser-status.js";
 
 const src = new TextDecoder().decode(
   GLib.file_get_contents(GLib.build_filenamev([GLib.get_current_dir(), "extension.js"]))[1],
@@ -27,8 +28,9 @@ const gettext = (s) => {
 const helperSrc = src.slice(src.indexOf("function formatResetsIn"), src.indexOf("export default class"));
 const helpers = new Function(
   "_",
+  "validBrowserSessionError",
   `${helperSrc}; return { formatResetsIn, formatUpdated, isExceedingPace, formatPace, formatCodexPace, formatCodexDetails, barColor, fillWidth, activeProviderIndex, validBrowserSummary, validActivityHistory, validCreditHistory, historyDayDetail, browserHelperNotice };`,
-)(gettext);
+)(gettext, validBrowserSessionError);
 const { formatResetsIn, formatUpdated, isExceedingPace, formatPace, formatCodexPace, formatCodexDetails, barColor, fillWidth, activeProviderIndex, validBrowserSummary, validActivityHistory, validCreditHistory, historyDayDetail, browserHelperNotice } = helpers;
 
 let failed = 0;
@@ -123,9 +125,12 @@ check(
 );
 check("no pace data", formatPace(null, 56), "");
 
-console.log("Codex shows the CLI's full pace summary and account details");
-check("Codex pace summary", formatCodexPace({ summary: "On pace | Expected 5% used | Runs out in 6d 14h" }),
-  "Pace: On pace | Expected 5% used | Runs out in 6d 14h");
+console.log("Codex shows a compact pace summary and account details");
+check("Codex pace summary", formatCodexPace({ summary: "On pace | Expected 5% used | Runs out in 6d 14h" }), "Pace: On pace");
+check("Codex deficit reserve summary", formatCodexPace({ summary: "Deficit reserve | Expected 5% used" }), "Pace: Deficit reserve");
+check("Codex summary without separators", formatCodexPace({ summary: "  On pace  " }), "Pace: On pace");
+check("empty Codex summary", formatCodexPace({ summary: "   | expected" }), "");
+check("missing Codex summary", formatCodexPace({}), "");
 check("missing Codex pace", formatCodexPace(null), "");
 check("Codex details omit zero balances", formatCodexDetails({
   creditsRemaining: 0,
@@ -187,6 +192,15 @@ check("different profile is rejected", validBrowserSummary(browserCache, "chromi
 check("expired cache is rejected", validBrowserSummary(browserCache, "firefox:profile", NOW.getTime() + 3601_000), false);
 check("fresh helper error remains visible", validBrowserSummary({ ...browserCache, status: "error", error: "No supported browser session found" }, "firefox:profile", NOW.getTime()), true);
 check("stale helper error is rejected", validBrowserSummary({ ...browserCache, status: "error", error: "No session" }, "firefox:profile", NOW.getTime() + 3601_000), false);
+const sessionError = { ...browserCache, status: "error", error: "browser session expired or rejected", errorCode: "session-invalid" };
+check("invalid-session cache is accepted for its profile", validBrowserSummary(sessionError, "firefox:profile", NOW.getTime()), true);
+check("unknown session error codes fail closed", validBrowserSummary({ ...sessionError, errorCode: "invented" }, "firefox:profile", NOW.getTime()), false);
+check("invalid session gives sign-in recovery", browserSessionMessage(sessionError).includes("Sign in again"), true);
+check("legacy auth errors also give sign-in recovery", browserSessionMessage({ error: "browser session expired or rejected" }).includes("Sign in again"), true);
+check("missing local credentials do not claim confirmed expiry", browserSessionMessage({ errorCode: "session-missing" }).includes("expired"), false);
+check("access denied is not labeled invalid", browserSessionMessage({ errorCode: "access-denied" }).includes("session may still be valid"), true);
+check("Cloudflare is not labeled invalid", browserSessionMessage({ errorCode: "cloudflare-challenge" }).includes("session may still be valid"), true);
+check("network error offers connection recovery", browserSessionMessage({ errorCode: "network-error" }).includes("Check your connection"), true);
 check("cache without a provider tag is rejected", validBrowserSummary({ ...browserCache, provider: undefined }, "firefox:profile", NOW.getTime()), false);
 check("disabled browser enrichment needs no setup notice", browserHelperNotice(false, "", null), "");
 check("unselected browser profile points to Settings", String(browserHelperNotice(true, "", null)).includes("Choose a browser profile"), true);
@@ -227,19 +241,19 @@ class ChartActor {
   set_child(actor) { this.children = [actor]; }
   connect(signal, fn) { this.handlers[signal] = fn; }
 }
-const renderChart = new Function("menu", "days", "field", "format", "labelField", "_", "dimLabel", "St", "Clutter", "historyDayDetail", "formatTokens", "BAR_WIDTH_PX", chartBody);
+const renderChart = new Function("menu", "days", "field", "format", "labelField", "_", "dimLabel", "St", "Clutter", "historyDayDetail", "formatTokens", "BAR_WIDTH_PX", "Pango", chartBody);
 const modelMenu = { box: new ChartActor({}) };
 renderChart(modelMenu, [{ model: "model-a", cost: 100000000 }, { model: "model-b", cost: 250000000 }], "cost",
   (v) => `$${(v / 100000000).toFixed(2)}`, "model", gettext, (params) => new ChartActor(params),
-  { BoxLayout: ChartActor, Button: ChartActor, Widget: ChartActor }, { ActorAlign: { END: "end", FILL: "fill" } }, historyDayDetail, String, 296);
+   { BoxLayout: ChartActor, Button: ChartActor, Widget: ChartActor }, { ActorAlign: { END: "end", FILL: "fill" } }, historyDayDetail, String, 296, { EllipsizeMode: { END: 3 } });
 const [modelDetail, modelChart] = modelMenu.box.children;
-check("model names are hidden until inspection", String(modelDetail.text).includes("model-a"), false);
+check("model names are hidden until inspection", String(modelDetail.children[0].text).includes("model-a"), false);
 check("chart gives every model an equal expanding slot", modelChart.layout_manager.homogeneous && modelChart.children.every((button) => button.x_expand), true);
 check("bars fill their expanding slots", modelChart.children.every((button) => button.children[0].x_expand), true);
 modelChart.children[1].handlers["enter-event"]();
-check("hover reveals model name and reported cost", String(modelDetail.text), "model-b · $2.50");
+check("hover reveals model name and reported cost", String(modelDetail.children[0].text), "model-b · $2.50");
 modelChart.children[0].handlers["key-focus-in"]();
-check("keyboard focus also reveals model details", String(modelDetail.text), "model-a · $1.00");
+check("keyboard focus also reveals model details", String(modelDetail.children[0].text), "model-a · $1.00");
 const opencodeRenderSource = src.slice(src.indexOf('    if (provider.id === "opencodego" && browserSummary'),
   src.indexOf("    // Bars are sized in pixels against the track"));
 check("OpenCode helper does not repeat quota windows", opencodeRenderSource.includes("_buildBrowserWindows"), false);
@@ -272,7 +286,7 @@ check("history heading and totals share the chart inset", historyActors.filter((
   String(actor.text) === "Token activity" || String(actor.text) === "Last 30 days: 12")
   .every((actor) => actor.style_class.includes("codexbar-history-inset")), true);
 
-const browserRender = new Function("provider", "_", "dimLabel", "validBrowserSummary", "browserHelperNotice", src.slice(
+const browserRender = new Function("provider", "_", "dimLabel", "validBrowserSummary", "browserHelperNotice", "browserSessionMessage", "BAR_WIDTH_PX", src.slice(
   src.lastIndexOf('    const profile = this._settings.get_string("browser-profile");'),
   src.indexOf("    // Bars are sized in pixels against the track"),
 ));
@@ -284,9 +298,45 @@ for (const id of ["deepseek", "codex", "opencodego"]) {
     _contentBox: { add_child: (label) => labels.push(label.text) },
     _buildBrowserSummary: () => { throw new Error("Error cache rendered as usage"); },
     _buildBrowserWindows: () => { throw new Error("Error cache rendered as windows"); },
-  }, { id }, gettext, (params) => params, validBrowserSummary, browserHelperNotice);
+  }, { id }, gettext, (params) => ({ ...params, clutter_text: {} }), validBrowserSummary, browserHelperNotice, browserSessionMessage, 296);
   check(`${id} helper errors show only the error`, labels, ["Browser helper: Session expired"]);
+  labels.length = 0;
+  browserRender.call({
+    _settings: { get_string: () => "firefox:profile", get_boolean: () => true },
+    _browserSummaries: { [id]: { ...sessionError, provider: id, updatedAt: new Date().toISOString() } },
+    _contentBox: { add_child: (label) => { labels.push(label.text); check(`${id} session recovery text wraps`, label.clutter_text.line_wrap, true); } },
+    _buildBrowserSummary: () => { throw new Error("Invalid session rendered as usage"); },
+    _buildBrowserWindows: () => { throw new Error("Invalid session rendered as windows"); },
+  }, { id }, gettext, (params) => ({ ...params, clutter_text: {} }), validBrowserSummary, browserHelperNotice, browserSessionMessage, 296);
+  check(`${id} invalid session appears in popup with recovery`, String(labels[0]).includes("Sign in again"), true);
 }
+
+console.log("chart details reserve two non-wrapping lines");
+const chartMethod = src.slice(src.indexOf("  _addChartToMenu("), src.indexOf("  _buildBrowserWindows("));
+const addChart = new Function("St", "Clutter", "Pango", "dimLabel", "_", "BAR_WIDTH_PX", "historyDayDetail", "formatTokens",
+  `return ({${chartMethod}})._addChartToMenu;`)(
+  { BoxLayout: ChartActor, Button: ChartActor, Widget: ChartActor }, { ActorAlign: { END: 1, FILL: 2 } },
+  { EllipsizeMode: { END: 3 } }, (params) => new ChartActor(params), gettext, 296, historyDayDetail, (n) => String(n));
+const chartMenu = { box: new ChartActor({}) };
+const points = [
+  { date: "2026-10-09T11:00:00Z", cost: 0, tokens: 772000, requests: 5 },
+  { date: "2026-10-09T14:00:00Z", cost: 0.12, tokens: 19500000, requests: 95 },
+  { date: "2026-10-09T15:00:00Z", cost: 0, tokens: 0, requests: 0 },
+];
+addChart(chartMenu, points, "cost", (value) => `$${value.toFixed(2)}`);
+const detailLines = chartMenu.box.children[0].children;
+check("exactly two detail labels exist before hovering", detailLines.length, 2);
+check("both detail lines disable wrapping", detailLines.map((line) => line.clutter_text.line_wrap), [false, false]);
+check("empty second line reserves space before hover", detailLines[1].text.length > 0, true);
+const bars = chartMenu.box.children[1].children;
+for (let i = 0; i < points.length; i++) {
+  bars[i].handlers["enter-event"]();
+  check(`point ${i} first line contains only date and cost`, detailLines[0].text, historyDayDetail(points[i].date, points[i].cost, (v) => `$${v.toFixed(2)}`));
+  check(`point ${i} second line keeps its space`, detailLines[1].text.length > 0, true);
+}
+bars[1].handlers["key-focus-in"]();
+check("keyboard focus shows tokens on second line", detailLines[1].text.includes("19500000 tokens"), true);
+check("keyboard focus shows requests on second line", detailLines[1].text.includes("95 requests"), true);
 
 console.log("");
 console.log(`${passed} passed, ${failed} failed`);

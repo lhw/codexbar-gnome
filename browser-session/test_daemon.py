@@ -20,6 +20,28 @@ spec.loader.exec_module(daemon)
 
 
 class DaemonTests(unittest.TestCase):
+    def test_paused_service_reports_reason_once_without_reading_sessions(self):
+        runtime = types.ModuleType("runtime")
+        runtime.load_settings = lambda: {"enabled": False, "profile": "", "interval": 900,
+                                        "codex_email": None, "flaresolverr_url": None}
+        with patch.object(sys, "argv", ["daemon.py", "--enable"]), patch.dict(sys.modules, runtime=runtime), \
+                patch.object(daemon.time, "sleep", side_effect=[None, KeyboardInterrupt]), \
+                patch.object(daemon, "refresh_provider") as refresh, contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(daemon.main(), 0)
+            refresh.assert_not_called()
+        self.assertEqual(output.getvalue().count("paused: access disabled or no selected profile"), 1)
+
+    def test_successful_refresh_is_visible_without_credentials_in_log(self):
+        with patch.object(daemon, "refresh"), contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertTrue(daemon.refresh_provider("codex", "private-profile"))
+        self.assertEqual(output.getvalue(), "codex refresh completed\n")
+
+    def test_deepseek_http_auth_error_without_code_still_skips_fallback(self):
+        for status in (401, 403):
+            with patch.object(daemon, "deepseek_call", side_effect=daemon.SessionError("rejected", status=status)) as call:
+                with self.assertRaises(daemon.SessionError):
+                    daemon.deepseek("not-a-real-token", now=1_760_000_000)
+                self.assertEqual(call.call_count, 1)
     def test_cookie_adapter_uses_its_own_normalizer_not_codex(self):
         with tempfile.TemporaryDirectory() as temp:
             profile = Path(temp)
@@ -359,6 +381,53 @@ class DaemonTests(unittest.TestCase):
                 handler.redirect_request(None, None, 302, "redirect", {}, "https://attacker.example")
         finally:
             daemon.HTTP = old
+
+    def test_http_failures_have_safe_recovery_codes_in_both_request_helpers(self):
+        old = daemon.HTTP
+        class Failed:
+            def __init__(self, code, headers=None): self.code, self.headers = code, headers or {}
+            def open(self, *_args, **_kwargs):
+                raise __import__("urllib.error").error.HTTPError("https://provider.test", self.code,
+                    "failure", self.headers, io.BytesIO(b"private response"))
+        try:
+            for code, headers, expected in ((401, {}, "session-invalid"), (403, {}, "access-denied"),
+                    (403, {"cf-mitigated": "challenge"}, "cloudflare-challenge")):
+                for call in (lambda: daemon.request_json("https://provider.test", "secret"),
+                             lambda: daemon.opencode_server_text({}, "id")):
+                    daemon.HTTP = Failed(code, headers)
+                    with self.assertRaises(daemon.SessionError) as raised:
+                        call()
+                    self.assertEqual(raised.exception.error_code, expected)
+                    self.assertNotIn("private response", str(raised.exception))
+        finally:
+            daemon.HTTP = old
+
+    def test_refresh_publishes_only_allowlisted_error_code_and_selected_missing(self):
+        old_cache, old_find, old_deepseek = daemon.CACHE_DIR, daemon.find_sessions, daemon.deepseek
+        try:
+            with tempfile.TemporaryDirectory() as temp:
+                daemon.CACHE_DIR = Path(temp)
+                daemon.find_sessions = lambda *_: (_ for _ in ()).throw(
+                    daemon.SessionError("selected browser profile has no matching provider session", code="session-missing"))
+                self.assertFalse(daemon.refresh_provider("deepseek", "firefox:gone"))
+                result = json.loads(daemon.cache_path("deepseek").read_text())
+                self.assertEqual(result["errorCode"], "session-missing")
+                self.assertEqual(result["source"], "firefox:gone")
+                self.assertNotIn("token", json.dumps(result))
+                daemon.find_sessions = lambda *_: ("firefox:test", Path(temp), "secret")
+                for invalid_code in ("not-allowed", []):
+                    daemon.deepseek = lambda *_: (_ for _ in ()).throw(daemon.SessionError("unsupported response", code=invalid_code))
+                    self.assertFalse(daemon.refresh_provider("deepseek", "firefox:test"))
+                    result = json.loads(daemon.cache_path("deepseek").read_text())
+                    self.assertNotIn("errorCode", result)
+                    self.assertNotIn("secret", json.dumps(result))
+                daemon.deepseek = lambda *_: {"provider": "deepseek", "updatedAt": dt.datetime.now(dt.timezone.utc).isoformat()}
+                self.assertTrue(daemon.refresh_provider("deepseek", "firefox:test"))
+                recovered = json.loads(daemon.cache_path("deepseek").read_text())
+                self.assertNotIn("errorCode", recovered)
+                self.assertNotIn("error", recovered)
+        finally:
+            daemon.CACHE_DIR, daemon.find_sessions, daemon.deepseek = old_cache, old_find, old_deepseek
 
     def test_flaresolverr_validation_and_rendered_session_protocol(self):
         self.assertEqual(daemon.validate_flaresolverr_url("http://127.0.0.1:8191"), "http://127.0.0.1:8191/v1")
