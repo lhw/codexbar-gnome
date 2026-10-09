@@ -2,8 +2,9 @@
 
 A GNOME Shell panel extension that shows AI provider usage limits, matching the
 layout of the macOS CodexBar menu. It reads from the
-[`codexbar`](https://github.com/steipete/CodexBar) command line tool, so nothing
-is scraped and no browser cookies are handled here.
+[`codexbar`](https://github.com/steipete/CodexBar) command line tool. The extension
+itself handles no browser credentials; an optional, separately enabled helper
+can add usage history from a signed-in browser session.
 
 Targets GNOME Shell 50. Uses the default theme, so it follows your light and dark
 settings.
@@ -32,6 +33,34 @@ provider the panel bar is tracking.
   </tr>
 </table>
 
+### With the optional browser-session daemon
+
+The additional usage details and charts below **require the browser-session
+daemon and a signed-in session in the selected browser profile**. Install `uv`,
+enable browser-session access in Preferences, select a profile, and use
+**Set up & start**. Installing the extension alone does not enable these features.
+See [helper setup and security information](#optional-browser-session-helper-experimental-off-by-default).
+
+<table>
+  <tr>
+    <td align="center" valign="top">
+      <img src="docs/screenshots/browser-codex.png" width="300" alt="Codex tab with browser-enriched token totals and an expanded 30-day token activity chart"><br>
+      <sub><b>Codex</b><br>30-day web token activity</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/screenshots/browser-opencodego.png" width="300" alt="OpenCode Go tab with 24-hour organization-wide Console usage and an expanded model-cost chart"><br>
+      <sub><b>OpenCode Go</b><br>Console usage and reported model costs, not out-of-pocket billing</sub>
+    </td>
+    <td align="center" valign="top">
+      <img src="docs/screenshots/browser-deepseek.png" width="300" alt="DeepSeek tab with browser usage totals and expanded daily spend and token charts"><br>
+      <sub><b>DeepSeek</b><br>Daily spend and token history</sub>
+    </td>
+  </tr>
+</table>
+
+These captures show the browser-history features; current versions use two-line
+chart details and a shorter Codex pace label.
+
 ## Install
 
 ```sh
@@ -54,8 +83,8 @@ picks up the new extension.
   needs attention without switching to it
 - One section per rate window: the label the CLI reports (Session, Weekly,
   Monthly), a usage bar, the percentage, and a reset countdown
-- A pace warning when usage exceeds the elapsed-time estimate; Codex shows its
-  full pace summary, including expected usage and run-out estimate
+- A pace warning when usage exceeds the elapsed-time estimate; Codex also shows
+  a compact on-pace or reserve/deficit summary
 - Codex credit balance, limit-reset credits, and plan when the CLI provides them
 - Balance providers such as DeepSeek, as a value rather than a bar
 - A cost summary, today and the last 30 days, for providers `codexbar cost`
