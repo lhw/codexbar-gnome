@@ -4,7 +4,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-SPEC = importlib.util.spec_from_file_location("helper", Path(__file__).with_name("helper.py"))
+SPEC = importlib.util.spec_from_file_location(
+    "helper", Path(__file__).with_name("helper.py")
+)
 helper = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(helper)
 
@@ -13,9 +15,14 @@ class HelperTests(unittest.TestCase):
     def test_foreground_commands_are_explicit_and_opted_in(self):
         with patch.object(helper, "run") as run:
             helper.main(["profiles"])
-            self.assertEqual(run.call_args.args[0][-3:], ["daemon.py", "--enable", "--list-profiles"])
+            self.assertEqual(
+                run.call_args.args[0][-3:], ["daemon.py", "--enable", "--list-profiles"]
+            )
             helper.main(["profiles", "--json"])
-            self.assertEqual(run.call_args.args[0][-4:], ["daemon.py", "--enable", "--list-profiles", "--json"])
+            self.assertEqual(
+                run.call_args.args[0][-4:],
+                ["daemon.py", "--enable", "--list-profiles", "--json"],
+            )
             helper.main(["once"])
             self.assertEqual(run.call_args.args[0][-2:], ["--enable", "--once"])
             helper.main(["start"])
@@ -35,21 +42,29 @@ class HelperTests(unittest.TestCase):
             helper.main(["start", "--json"])
 
     def test_service_install_is_private_atomic_and_does_not_follow_symlinks(self):
-        with tempfile.TemporaryDirectory(dir="/tmp/opencode") as temp:
+        with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             unit_dir = root / "units"
             unit_dir.mkdir()
             unrelated = root / "untouched"
             unrelated.write_text("keep this")
             (unit_dir / helper.UNIT).symlink_to(unrelated)
-            with patch.object(helper, "UNIT_DIR", unit_dir), patch.object(helper, "setup") as setup, \
-                    patch.object(helper.shutil, "which", return_value="/usr/bin/uv"), patch.object(helper, "run") as run:
+            with (
+                patch.object(helper, "UNIT_DIR", unit_dir),
+                patch.object(helper, "setup") as setup,
+                patch.object(helper.shutil, "which", return_value="/usr/bin/uv"),
+                patch.object(helper, "run") as run,
+            ):
                 helper.main(["enable-service"])
                 setup.assert_called_once()
-                self.assertEqual([call.args[0] for call in run.call_args_list], [
-                    ["systemctl", "--user", "daemon-reload"],
-                    ["systemctl", "--user", "enable", helper.UNIT],
-                    ["systemctl", "--user", "restart", helper.UNIT]])
+                self.assertEqual(
+                    [call.args[0] for call in run.call_args_list],
+                    [
+                        ["systemctl", "--user", "daemon-reload"],
+                        ["systemctl", "--user", "enable", helper.UNIT],
+                        ["systemctl", "--user", "restart", helper.UNIT],
+                    ],
+                )
             unit = unit_dir / helper.UNIT
             self.assertFalse(unit.is_symlink())
             self.assertEqual(unit.stat().st_mode & 0o777, 0o600)
@@ -58,11 +73,15 @@ class HelperTests(unittest.TestCase):
             self.assertEqual(list(unit_dir.iterdir()), [unit])
 
     def test_service_write_failure_cleans_up_and_never_starts_service(self):
-        with tempfile.TemporaryDirectory(dir="/tmp/opencode") as temp:
+        with tempfile.TemporaryDirectory() as temp:
             unit_dir = Path(temp)
-            with patch.object(helper, "UNIT_DIR", unit_dir), patch.object(helper, "setup"), \
-                    patch.object(helper.shutil, "which", return_value="/usr/bin/uv"), patch.object(helper, "run") as run, \
-                    patch.object(helper.os, "replace", side_effect=OSError("write failed")):
+            with (
+                patch.object(helper, "UNIT_DIR", unit_dir),
+                patch.object(helper, "setup"),
+                patch.object(helper.shutil, "which", return_value="/usr/bin/uv"),
+                patch.object(helper, "run") as run,
+                patch.object(helper.os, "replace", side_effect=OSError("write failed")),
+            ):
                 with self.assertRaises(OSError):
                     helper.install_service()
                 run.assert_not_called()
