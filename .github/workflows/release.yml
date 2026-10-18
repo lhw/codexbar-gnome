@@ -13,6 +13,12 @@ on:
   workflow_run:
     workflows: ["release-please"]
     types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to rebuild
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -20,33 +26,44 @@ permissions:
 jobs:
   attach-artifact:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # Only act when release-please itself succeeded.
-    if: github.event.workflow_run.conclusion == 'success'
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    env:
+      GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: main
-
       - name: Check whether a release was actually cut
         id: gate
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          REQUESTED_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          TAG="$(gh release view --json tagName --jq .tagName)"
-          TAG_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}" --jq .object.sha)"
-          if [ "$TAG_SHA" = "$HEAD_SHA" ]; then
-            echo "New release $TAG at $TAG_SHA, building"
+          if [ -n "$REQUESTED_TAG" ]; then
+            TAG="$(gh release view "$REQUESTED_TAG" --json tagName --jq .tagName)"
+          else
+            TAG="$(gh release view --json tagName --jq .tagName)"
+          fi
+          TAG_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)"
+          if [ -n "$REQUESTED_TAG" ] || [ "$TAG_SHA" = "$HEAD_SHA" ]; then
+            echo "Release $TAG at $TAG_SHA, building"
             echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+            echo "sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
           else
             echo "No new release (latest is $TAG at $TAG_SHA), skipping"
             echo "build=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - uses: actions/checkout@v7.0.1
+        if: steps.gate.outputs.build == 'true'
+        with:
+          ref: ${{ steps.gate.outputs.sha }}
+
       - name: Install build dependencies
         if: steps.gate.outputs.build == 'true'
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: "3.12"
 
@@ -61,13 +78,18 @@ jobs:
 
       - name: Build
         if: steps.gate.outputs.build == 'true'
-        run: ./build.sh
+        env:
+          TAG: ${{ steps.gate.outputs.tag }}
+        run: |
+          # The immutable v1.2.0 tests require this directory; newer tests use tempfile defaults.
+          if [ "$TAG" = "v1.2.0" ]; then mkdir -p /tmp/opencode; fi
+          ./build.sh
 
       - name: Attach extension zip to the release
         if: steps.gate.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.gate.outputs.tag }}
         run: |
-          TAG="$(gh release view --json tagName --jq .tagName)"
           echo "Attaching to $TAG"
           gh release upload "$TAG" ./*.shell-extension.zip --clobber
