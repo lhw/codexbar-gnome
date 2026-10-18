@@ -1,14 +1,7 @@
 name: release
 
-# Builds the extension zip and attaches it to the published release.
-#
-# Triggered on workflow_run rather than on `release: published`, because
-# release-please publishes with GITHUB_TOKEN and events from that token do not
-# trigger further workflow runs.
-#
-# workflow_run fires after every release-please run, including ones that only
-# opened a release PR, so the first step checks whether a release was actually
-# cut and skips the expensive gnome-shell install when it was not.
+# release-please creates a draft using GITHUB_TOKEN, so use workflow_run rather
+# than release events. Attach the ZIP before publishing makes the release immutable.
 on:
   workflow_run:
     workflows: ["release-please"]
@@ -16,80 +9,124 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to rebuild
+        description: Existing release tag to build (only drafts can be published)
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  attach-artifact:
+  gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Only act when release-please itself succeeded.
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    env:
-      GH_REPO: ${{ github.repository }}
+    timeout-minutes: 5
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       github.event.workflow_run.head_branch == 'main')
+    outputs:
+      build: ${{ steps.release.outputs.build }}
+      tag: ${{ steps.release.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
     steps:
-      - name: Check whether a release was actually cut
-        id: gate
+      - name: Select release
+        id: release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
           REQUESTED_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
+          TAG=""
           if [ -n "$REQUESTED_TAG" ]; then
             TAG="$(gh release view "$REQUESTED_TAG" --json tagName --jq .tagName)"
           else
-            TAG="$(gh release view --json tagName --jq .tagName)"
+            DRAFTS="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --jq '.[] | select(.draft) | .tag_name')"
+            while IFS= read -r candidate; do
+              [ -n "$candidate" ] || continue
+              SHA="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${candidate}" --jq .sha)"
+              if [ "$SHA" = "$HEAD_SHA" ]; then TAG="$candidate"; break; fi
+            done <<< "$DRAFTS"
           fi
-          TAG_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)"
-          if [ -n "$REQUESTED_TAG" ] || [ "$TAG_SHA" = "$HEAD_SHA" ]; then
-            echo "Release $TAG at $TAG_SHA, building"
-            echo "build=true" >> "$GITHUB_OUTPUT"
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-            echo "sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
-          else
-            echo "No new release (latest is $TAG at $TAG_SHA), skipping"
+          if [ -z "$TAG" ]; then
+            echo "No draft release for this commit, skipping"
             echo "build=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          SHA="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)"
+          echo "build=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/checkout@v7.0.1
-        if: steps.gate.outputs.build == 'true'
+  build:
+    needs: gate
+    if: needs.gate.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ steps.gate.outputs.sha }}
+          ref: ${{ needs.gate.outputs.sha }}
+          persist-credentials: false
 
-      - name: Install build dependencies
-        if: steps.gate.outputs.build == 'true'
-        uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: "3.12"
+          enable-cache: false
 
       - name: Install GNOME build dependencies
-        if: steps.gate.outputs.build == 'true'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            gjs \
-            gnome-shell \
-            libglib2.0-bin
+          sudo apt-get install -y --no-install-recommends gjs gnome-shell libglib2.0-bin
 
       - name: Build
-        if: steps.gate.outputs.build == 'true'
         env:
-          TAG: ${{ steps.gate.outputs.tag }}
+          TAG: ${{ needs.gate.outputs.tag }}
         run: |
-          # The immutable v1.2.0 tests require this directory; newer tests use tempfile defaults.
+          # Compatibility with the immutable source of the original v1.2.0 tag.
           if [ "$TAG" = "v1.2.0" ]; then mkdir -p /tmp/opencode; fi
           ./build.sh
 
-      - name: Attach extension zip to the release
-        if: steps.gate.outputs.build == 'true'
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: extension
+          path: ./*.shell-extension.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [gate, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      # No checkout or execution of repository code in this write-privileged job.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: extension
+          path: artifact
+
+      - name: Attach ZIP and publish draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.gate.outputs.tag }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.gate.outputs.tag }}
+          EXPECTED_SHA: ${{ needs.gate.outputs.sha }}
         run: |
-          echo "Attaching to $TAG"
-          gh release upload "$TAG" ./*.shell-extension.zip --clobber
+          set -euo pipefail
+          SHA="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${TAG}" --jq .sha)"
+          [ "$SHA" = "$EXPECTED_SHA" ]
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != "true" ]; then
+            echo "Release is already published; its assets will not be modified"
+            exit 0
+          fi
+          gh release upload "$TAG" artifact/*.shell-extension.zip --clobber
+          gh release edit "$TAG" --draft=false
