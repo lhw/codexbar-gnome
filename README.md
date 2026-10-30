@@ -47,19 +47,16 @@ session**. They are off by default; see [setup and security](#browser-session-he
 
 ## Install
 
-```sh
-git clone https://github.com/lhw/codexbar-gnome
-cd codexbar-gnome
-./install.sh
-```
+Download `codexbar-gnome@lhw.shell-extension.zip` from the
+[latest release](https://github.com/lhw/codexbar-gnome/releases/latest), then install it:
 
-Or download `codexbar-gnome@lhw.shell-extension.zip` from the
-[releases page](https://github.com/lhw/codexbar-gnome/releases) and install it
-with `gnome-extensions install --force <zip>`.
+```sh
+gnome-extensions install --force ~/Downloads/codexbar-gnome@lhw.shell-extension.zip
+```
 
 You need the `codexbar` CLI on `PATH` (`brew install steipete/tap/codexbar`, or
 a Linux build). On Wayland, log out and back in after installing so the shell
-picks up the new extension.
+picks up the new extension, then enable **CodexBar** in the Extensions app.
 
 ## Usage and settings
 
@@ -118,8 +115,13 @@ service problems, check:
 journalctl --user -u codexbar-browser-session.service -n 30
 ```
 
+## Development
+
+`./install.sh` is for development only: it builds, tests, and installs a local
+checkout. See [AGENTS.md](AGENTS.md) for build and test instructions.
+
 ## Credits
 
 Fork of [InledGroup/codexbar-gnome](https://github.com/InledGroup/codexbar-gnome).
 Provider logos from [CodexBar](https://github.com/steipete/CodexBar/tree/main/docs/logos).
-MIT licensed; see [LICENSE.md](LICENSE.md). Contributor notes: [AGENTS.md](AGENTS.md).
+MIT licensed; see [LICENSE.md](LICENSE.md).

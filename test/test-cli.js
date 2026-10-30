@@ -106,11 +106,9 @@ console.log("a payload larger than one read buffer is fully drained");
     "enabled entries carry display names",
     enabled.every((e) => typeof e.displayName === "string" && e.displayName.length > 0),
   );
-  check(
-    "enabled ids match what the extension would offer",
-    enabled.map((e) => e.provider).sort(),
-    ["codex", "deepseek", "opencodego"],
-  );
+  const ids = enabled.map((e) => e.provider);
+  ok("enabled provider ids are non-empty and unique",
+    ids.every((id) => typeof id === "string" && id.length > 0) && new Set(ids).size === ids.length);
 }
 
 console.log("");

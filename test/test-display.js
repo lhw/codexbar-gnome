@@ -311,6 +311,67 @@ for (const id of ["deepseek", "codex", "opencodego"]) {
   check(`${id} invalid session appears in popup with recovery`, String(labels[0]).includes("Sign in again"), true);
 }
 
+console.log("browser cache refresh retains valid data and rejects late callbacks");
+const pendingCacheReads = [];
+const cacheGio = { File: { new_for_path: (path) => ({
+  load_contents_async: (_cancel, callback) => pendingCacheReads.push({ path, callback }),
+}) } };
+const loadCache = new Function("Gio", "GLib", "validBrowserSummary", `return ({${src.slice(
+  src.indexOf("  _loadBrowserSummary() {"), src.indexOf("  _setupTimer() {"))}})._loadBrowserSummary;`)(cacheGio, GLib, validBrowserSummary);
+let cacheProfile = "firefox:profile";
+let cacheEnabled = true;
+let cacheRenders = 0;
+const freshCodex = { provider: "codex", source: cacheProfile, updatedAt: new Date().toISOString() };
+const cacheContext = {
+  _browserLoadGeneration: 0,
+  _browserSummaries: { codex: freshCodex, deepseek: { ...freshCodex, provider: "deepseek", source: "another-profile" } },
+  _settings: { get_boolean: () => cacheEnabled, get_string: () => cacheProfile },
+  _indicator: { menu: { isOpen: false } },
+  _updateUI: () => cacheRenders++,
+};
+const finishCacheRead = (read, data, failed = false) => read.callback({ load_contents_finish: () => {
+  if (failed) throw new Error("Missing cache");
+  return [true, new TextEncoder().encode(typeof data === "string" ? data : JSON.stringify(data))];
+} }, {});
+loadCache.call(cacheContext);
+check("valid cache stays visible while reads are pending", cacheContext._browserSummaries.codex, freshCodex);
+check("wrong-profile cache is removed immediately", cacheContext._browserSummaries.deepseek, undefined);
+const firstCodexRead = pendingCacheReads.find((read) => read.path.endsWith("-codex.json"));
+const refreshedCodex = { ...freshCodex, todayTokens: 123 };
+finishCacheRead(firstCodexRead, refreshedCodex);
+check("closed menu receives fresh cached data", cacheContext._browserSummaries.codex, refreshedCodex);
+check("closed cache read does not redraw the menu", cacheRenders, 0);
+cacheContext._indicator.menu.isOpen = true;
+pendingCacheReads.length = 0;
+loadCache.call(cacheContext);
+finishCacheRead(firstCodexRead, null, true);
+check("old failed callback cannot erase a newer cache", cacheContext._browserSummaries.codex, refreshedCodex);
+const currentCodexRead = pendingCacheReads.find((read) => read.path.endsWith("-codex.json"));
+finishCacheRead(currentCodexRead, "malformed JSON");
+check("malformed current cache removes previous data", cacheContext._browserSummaries.codex, undefined);
+check("failed current read redraws an open menu", cacheRenders > 0, true);
+cacheContext._browserSummaries.codex = freshCodex;
+cacheProfile = "new-profile";
+loadCache.call(cacheContext);
+check("profile switch immediately removes old data", cacheContext._browserSummaries.codex, undefined);
+cacheContext._browserSummaries.codex = freshCodex;
+cacheEnabled = false;
+loadCache.call(cacheContext);
+check("opting out clears browser caches", cacheContext._browserSummaries, {});
+let menuStateHandler;
+const menuOpenCalls = [];
+const menuOpenContext = {
+  _indicator: { menu: { connect: (_signal, handler) => { menuStateHandler = handler; } } },
+  _loadBrowserSummary: () => menuOpenCalls.push("load"),
+  _updateUI: () => menuOpenCalls.push("render"),
+};
+const menuOpenSource = src.match(/this\._indicator\.menu\.connect\("open-state-changed",[\s\S]*?\n    \}\);/)?.[0];
+new Function(menuOpenSource).call(menuOpenContext);
+menuStateHandler(null, false);
+check("closing the menu does not rebuild it", menuOpenCalls, []);
+menuStateHandler(null, true);
+check("opening the menu reloads caches and renders immediately", menuOpenCalls, ["load", "render"]);
+
 console.log("chart details reserve two non-wrapping lines");
 const chartMethod = src.slice(src.indexOf("  _addChartToMenu("), src.indexOf("  _buildBrowserWindows("));
 const addChart = new Function("St", "Clutter", "Pango", "dimLabel", "_", "BAR_WIDTH_PX", "historyDayDetail", "formatTokens",
