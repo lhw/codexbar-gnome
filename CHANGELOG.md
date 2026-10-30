@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.2.1](https://github.com/lhw/codexbar-gnome/compare/v1.2.0...v1.2.1) (2026-10-30)
+
+
+### Bug Fixes
+
+* harden release permissions and immutable publishing ([#12](https://github.com/lhw/codexbar-gnome/issues/12)) ([9f11652](https://github.com/lhw/codexbar-gnome/commit/9f11652c0eb748c6788ff9554dc9083c33a16c36))
+* refresh browser usage when opening the popup ([#13](https://github.com/lhw/codexbar-gnome/issues/13)) ([9becb6e](https://github.com/lhw/codexbar-gnome/commit/9becb6e24d15be301d244b37dccf93b2414910e5))
+* repair release builds and update actions to Node 24 ([#10](https://github.com/lhw/codexbar-gnome/issues/10)) ([da50df5](https://github.com/lhw/codexbar-gnome/commit/da50df5efaf6f3d130b4c1cc22583e7fdfc1aa8e))
+
 ## [1.2.0](https://github.com/lhw/codexbar-gnome/compare/v1.1.1...v1.2.0) (2026-10-09)
 
 
