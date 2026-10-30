@@ -374,6 +374,13 @@ export default class CodexBarExtension extends Extension {
       this,
     );
 
+    this._indicator.menu.connect("open-state-changed", (_menu, isOpen) => {
+      if (isOpen) {
+        this._loadBrowserSummary();
+        this._updateUI();
+      }
+    });
+
     this._buildFooter();
     this._loadBrowserSummary();
     this._setupTimer();
@@ -421,9 +428,14 @@ export default class CodexBarExtension extends Extension {
 
   _loadBrowserSummary() {
     const generation = ++this._browserLoadGeneration;
-    this._browserSummaries = {};
-    if (!this._settings?.get_boolean("show-browser-summary")) return;
+    if (!this._settings?.get_boolean("show-browser-summary")) {
+      this._browserSummaries = {};
+      return;
+    }
     const profile = this._settings.get_string("browser-profile");
+    this._browserSummaries = Object.fromEntries(
+      Object.entries(this._browserSummaries).filter(([provider, data]) => data?.provider === provider && validBrowserSummary(data, profile)),
+    );
     for (const provider of ["deepseek", "opencodego", "codex"]) {
       const name = `browser-usage-${provider}.json`;
       const file = Gio.File.new_for_path(GLib.build_filenamev([GLib.get_user_cache_dir(), "codexbar", name]));
@@ -434,11 +446,20 @@ export default class CodexBarExtension extends Extension {
               !this._settings?.get_boolean("show-browser-summary") ||
               profile !== this._settings.get_string("browser-profile")) return;
           const data = JSON.parse(new TextDecoder().decode(bytes));
-          if (data.provider !== provider || !validBrowserSummary(data, profile)) return;
+          if (data.provider !== provider || !validBrowserSummary(data, profile)) {
+            delete this._browserSummaries[provider];
+            if (this._indicator.menu.isOpen) this._updateUI();
+            return;
+          }
           this._browserSummaries[provider] = data;
           if (this._indicator.menu.isOpen) this._updateUI();
         } catch (e) {
           // An absent or malformed optional cache does not affect CLI usage.
+          if (this._indicator && generation === this._browserLoadGeneration &&
+              this._settings?.get_boolean("show-browser-summary") && profile === this._settings.get_string("browser-profile")) {
+            delete this._browserSummaries[provider];
+            if (this._indicator.menu.isOpen) this._updateUI();
+          }
         }
       });
     }
