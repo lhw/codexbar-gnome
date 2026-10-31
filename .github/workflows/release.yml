@@ -24,6 +24,9 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # Listing draft releases requires write access; this job never checks out or executes repository code.
+    permissions:
+      contents: write
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
