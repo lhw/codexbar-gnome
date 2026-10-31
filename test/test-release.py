@@ -105,6 +105,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(calls, "")
 
     def test_least_privilege_and_pins(self):
+        gate = WORKFLOW.split("\n  gate:\n", 1)[1].split("\n  build:\n", 1)[0]
+        self.assertIn("permissions:\n      contents: write", gate)
+        self.assertNotIn("actions/checkout@", gate)
         build = WORKFLOW.split("\n  build:\n", 1)[1].split("\n  publish:\n", 1)[0]
         self.assertNotIn("contents: write", build)
         self.assertNotIn("GH_TOKEN", build)

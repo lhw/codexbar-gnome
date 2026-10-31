@@ -54,12 +54,13 @@ Release-please still maintains the version and cuts releases, and `.github/workf
 builds the zip and attaches it to the published release, so that path still
 installs `gnome-shell`.
 
-Release-please creates drafts and their tags. The release workflow selects the
-matching draft, builds with a read-only token and no persisted Git credentials,
-then uploads and publishes from a separate job that never executes repository
-code. Published releases are immutable; manual retries can finish drafts but
-never replace published assets. All actions are SHA-pinned and Dependabot keeps
-the pins current. Run `python3 test/test-release.py` after workflow changes.
+Release-please creates drafts and their tags. The release workflow uses a
+write token in its no-checkout gate to discover drafts, builds with a read-only
+token and no persisted Git credentials, then uploads and publishes from a
+separate job that never executes repository code. Published releases are
+immutable; manual retries can finish drafts but never replace published assets.
+All actions are SHA-pinned and Dependabot keeps the pins current. Run
+`python3 test/test-release.py` after workflow changes.
 
 `build.sh` runs `test-parse`, `test-cost`, `test-display`, `test-links`,
 `test-prefs` and `test-cli` against fixtures in `fixtures/`, plus the
