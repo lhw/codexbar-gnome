@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/lhw/codexbar-gnome/compare/v1.2.1...v1.2.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* support GNOME Shell 51 layout API ([#14](https://github.com/lhw/codexbar-gnome/issues/14)) ([5021641](https://github.com/lhw/codexbar-gnome/commit/5021641b5a7a4d08fbf4e7316b7d6ea43143ddf8))
+
 ## [1.2.1](https://github.com/lhw/codexbar-gnome/compare/v1.2.0...v1.2.1) (2026-10-30)
 
 
