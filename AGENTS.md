@@ -5,7 +5,7 @@ the extension and deliberately contains none of this.
 
 ## What this is
 
-A GNOME Shell 50 panel extension that shows AI provider usage limits, laid out
+A GNOME Shell 50 and 51 panel extension that shows AI provider usage limits, laid out
 like the macOS CodexBar menu. It shells out to the
 [`codexbar`](https://github.com/steipete/CodexBar) CLI and parses its JSON. It
 does not talk to providers itself and holds no credentials.

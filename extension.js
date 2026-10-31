@@ -317,7 +317,7 @@ export default class CodexBarExtension extends Extension {
     // neighbours.
     this._panelTrack = new St.BoxLayout({
       style_class: "codexbar-panel-track",
-      vertical: false,
+      orientation: Clutter.Orientation.HORIZONTAL,
       x_align: Clutter.ActorAlign.CENTER,
       y_align: Clutter.ActorAlign.CENTER,
       height: PANEL_BAR_HEIGHT,
@@ -336,7 +336,7 @@ export default class CodexBarExtension extends Extension {
     this._tabsBox = new St.BoxLayout({ style_class: "codexbar-tabs" });
     this._contentBox = new St.BoxLayout({
       style_class: "codexbar-content",
-      vertical: true,
+      orientation: Clutter.Orientation.VERTICAL,
       x_expand: true,
     });
     // The section's own actor has to join the menu box: addMenuItem fills the
@@ -913,7 +913,7 @@ export default class CodexBarExtension extends Extension {
       });
 
       const column = new St.BoxLayout({
-        vertical: true,
+        orientation: Clutter.Orientation.VERTICAL,
         y_align: Clutter.ActorAlign.CENTER,
       });
       column.add_child(this._providerIcon(provider, TAB_ICON_SIZE));
@@ -966,7 +966,7 @@ export default class CodexBarExtension extends Extension {
    * @returns {St.BoxLayout}
    */
   _buildMeter(window, isCodex = false) {
-    const box = new St.BoxLayout({ vertical: true, x_expand: true });
+    const box = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true });
     box.add_child(new St.Label({ text: window.label, style_class: "codexbar-section" }));
 
     // A plain St.Widget, not a BoxLayout: the fill and the tick have to overlap
@@ -1031,7 +1031,7 @@ export default class CodexBarExtension extends Extension {
    * @returns {St.BoxLayout}
    */
   _buildBalance(window) {
-    const box = new St.BoxLayout({ vertical: true, x_expand: true });
+    const box = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true });
     box.add_child(new St.Label({ text: window.label, style_class: "codexbar-section" }));
 
     const row = new St.BoxLayout({ x_expand: true });
@@ -1054,7 +1054,7 @@ export default class CodexBarExtension extends Extension {
   _buildCost(providerId) {
     const providerCost = this._cost.providers.find((entry) => entry.id === providerId);
     if (!providerCost) return new St.Widget();
-    const box = new St.BoxLayout({ vertical: true, x_expand: true });
+    const box = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true });
     box.add_child(new St.Label({ text: _("Local cost estimate"), style_class: "codexbar-section" }));
 
     const row = (label, cost, tokens) => {
@@ -1073,7 +1073,7 @@ export default class CodexBarExtension extends Extension {
   }
 
   _buildBrowserSummary(data) {
-    const box = new St.BoxLayout({ vertical: true, x_expand: true });
+    const box = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true });
     box.add_child(new St.Label({ text: _("Browser usage · %s").format(data.periodLabel), style_class: "codexbar-section" }));
     const line = (label, value) => {
       if (!value) return;
@@ -1144,7 +1144,7 @@ export default class CodexBarExtension extends Extension {
   }
 
   _addChartToMenu(menu, days, field, format, labelField = "date") {
-    const detail = new St.BoxLayout({ vertical: true, width: BAR_WIDTH_PX, x_expand: true, style_class: "codexbar-history-detail" });
+    const detail = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, width: BAR_WIDTH_PX, x_expand: true, style_class: "codexbar-history-detail" });
     const primaryDetail = dimLabel({ text: labelField === "model" ? _("Hover or focus a model for details") : _("Hover or focus a bar for details"), x_expand: true });
     primaryDetail.clutter_text.line_wrap = false;
     primaryDetail.clutter_text.ellipsize = Pango.EllipsizeMode.END;
@@ -1182,11 +1182,11 @@ export default class CodexBarExtension extends Extension {
   }
 
   _buildBrowserWindows(windows, title) {
-    const box = new St.BoxLayout({ vertical: true, x_expand: true });
+    const box = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true });
     if (!windows.length) return box;
     box.add_child(new St.Label({ text: title, style_class: "codexbar-section" }));
     for (const window of windows) {
-      const row = new St.BoxLayout({ vertical: true, x_expand: true });
+      const row = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true });
       row.add_child(dimLabel({ text: window.label }));
       const track = new St.Widget({ style_class: "codexbar-bar-track", width: BAR_WIDTH_PX, height: 8 });
       const percent = Math.max(0, Math.min(100, Number(window.usedPercent) || 0));
@@ -1211,7 +1211,7 @@ export default class CodexBarExtension extends Extension {
    * @returns {St.BoxLayout}
    */
   _messageBox(title, detail) {
-    const box = new St.BoxLayout({ vertical: true, x_expand: true });
+    const box = new St.BoxLayout({ orientation: Clutter.Orientation.VERTICAL, x_expand: true });
     box.add_child(new St.Label({ text: title, style_class: "codexbar-section" }));
     const detailLabel = dimLabel({ text: detail });
     detailLabel.clutter_text.line_wrap = true;
