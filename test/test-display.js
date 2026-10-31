@@ -48,6 +48,10 @@ function check(label, actual, expected) {
   }
 }
 
+check("BoxLayouts use the supported orientation API", /vertical\s*:/.test(src), false);
+check("BoxLayouts use Clutter orientations", src.includes("orientation: Clutter.Orientation.VERTICAL") &&
+  src.includes("orientation: Clutter.Orientation.HORIZONTAL"), true);
+
 const NOW = new Date("2026-10-08T12:00:00Z");
 
 console.log("reset countdowns match the macOS wording");
@@ -245,7 +249,7 @@ const renderChart = new Function("menu", "days", "field", "format", "labelField"
 const modelMenu = { box: new ChartActor({}) };
 renderChart(modelMenu, [{ model: "model-a", cost: 100000000 }, { model: "model-b", cost: 250000000 }], "cost",
   (v) => `$${(v / 100000000).toFixed(2)}`, "model", gettext, (params) => new ChartActor(params),
-   { BoxLayout: ChartActor, Button: ChartActor, Widget: ChartActor }, { ActorAlign: { END: "end", FILL: "fill" } }, historyDayDetail, String, 296, { EllipsizeMode: { END: 3 } });
+    { BoxLayout: ChartActor, Button: ChartActor, Widget: ChartActor }, { ActorAlign: { END: "end", FILL: "fill" }, Orientation: { VERTICAL: "vertical", HORIZONTAL: "horizontal" } }, historyDayDetail, String, 296, { EllipsizeMode: { END: 3 } });
 const [modelDetail, modelChart] = modelMenu.box.children;
 check("model names are hidden until inspection", String(modelDetail.children[0].text).includes("model-a"), false);
 check("chart gives every model an equal expanding slot", modelChart.layout_manager.homogeneous && modelChart.children.every((button) => button.x_expand), true);
@@ -376,7 +380,7 @@ console.log("chart details reserve two non-wrapping lines");
 const chartMethod = src.slice(src.indexOf("  _addChartToMenu("), src.indexOf("  _buildBrowserWindows("));
 const addChart = new Function("St", "Clutter", "Pango", "dimLabel", "_", "BAR_WIDTH_PX", "historyDayDetail", "formatTokens",
   `return ({${chartMethod}})._addChartToMenu;`)(
-  { BoxLayout: ChartActor, Button: ChartActor, Widget: ChartActor }, { ActorAlign: { END: 1, FILL: 2 } },
+  { BoxLayout: ChartActor, Button: ChartActor, Widget: ChartActor }, { ActorAlign: { END: 1, FILL: 2 }, Orientation: { VERTICAL: "vertical", HORIZONTAL: "horizontal" } },
   { EllipsizeMode: { END: 3 } }, (params) => new ChartActor(params), gettext, 296, historyDayDetail, (n) => String(n));
 const chartMenu = { box: new ChartActor({}) };
 const points = [
@@ -386,6 +390,8 @@ const points = [
 ];
 addChart(chartMenu, points, "cost", (value) => `$${value.toFixed(2)}`);
 const detailLines = chartMenu.box.children[0].children;
+check("chart details use vertical orientation", chartMenu.box.children[0].orientation, "vertical");
+check("chart bars keep horizontal default orientation", chartMenu.box.children[1].orientation, undefined);
 check("exactly two detail labels exist before hovering", detailLines.length, 2);
 check("both detail lines disable wrapping", detailLines.map((line) => line.clutter_text.line_wrap), [false, false]);
 check("empty second line reserves space before hover", detailLines[1].text.length > 0, true);

@@ -1,6 +1,6 @@
 # CodexBar for GNOME
 
-A GNOME Shell 50 panel extension for AI provider usage limits, balances, and
+A GNOME Shell 50 and 51 panel extension for AI provider usage limits, balances, and
 costs, powered by the [`codexbar`](https://github.com/steipete/CodexBar) CLI.
 Uses your GNOME theme. An optional browser-session helper adds usage history.
 
