@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/lhw/codexbar-gnome/compare/v1.2.2...v1.2.3) (2026-10-31)
+
+
+### Bug Fixes
+
+* allow release gate to discover draft releases ([#16](https://github.com/lhw/codexbar-gnome/issues/16)) ([37400ce](https://github.com/lhw/codexbar-gnome/commit/37400cea52df085cb72ca5ef503e8cb8998a7f55))
+
 ## [1.2.2](https://github.com/lhw/codexbar-gnome/compare/v1.2.1...v1.2.2) (2026-10-31)
 
 
