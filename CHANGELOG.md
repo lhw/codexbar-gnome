@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/lhw/codexbar-gnome/compare/v1.2.2...v1.3.0) (2026-11-07)
+
+
+### Features
+
+* Add z.ai Coding Plan details and charts ([#18](https://github.com/lhw/codexbar-gnome/issues/18)) ([484ae1f](https://github.com/lhw/codexbar-gnome/commit/484ae1fe324e04231fa89b975e754d35bbe3cd28))
+
+
+### Bug Fixes
+
+* allow release gate to discover draft releases ([#16](https://github.com/lhw/codexbar-gnome/issues/16)) ([37400ce](https://github.com/lhw/codexbar-gnome/commit/37400cea52df085cb72ca5ef503e8cb8998a7f55))
+
 ## [1.2.2](https://github.com/lhw/codexbar-gnome/compare/v1.2.1...v1.2.2) (2026-10-31)
 
 
